@@ -1,0 +1,159 @@
+/* Hub — shared tokens (locked Decision) */
+:root {
+  --paper: #FAF8F5;
+  --surface: #FFFFFF;
+  --ink: #1C1917;
+  --ink-soft: #78716C;
+  --line: rgba(28, 25, 23, 0.12);
+  --good: #0D9488;
+  --warn: #C2410C;
+  --cta: #111111;
+  --cta-label: #FFFFFF;
+  --focus: #1C1917;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0A0A0A;
+    --surface: #141414;
+    --ink: #FAFAFA;
+    --ink-soft: #A8A29E;
+    --line: rgba(250, 250, 250, 0.12);
+    --good: #2DD4BF;
+    --cta: #FAFAFA;
+    --cta-label: #0A0A0A;
+    --focus: #FAFAFA;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: var(--font);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hub {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  min-height: 100dvh;
+}
+
+.hub-header {
+  margin-bottom: 24px;
+}
+
+.hub-wordmark {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+}
+
+.hub-lede {
+  margin: 8px 0 0;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  min-height: 44px;
+  transition: opacity 80ms;
+}
+
+.game-card:active {
+  opacity: 0.85;
+}
+
+.game-card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.game-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.game-card-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.game-card-hook {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+.game-card-meta {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+}
+
+.game-card-chevron {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+.hub-footer {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card {
+    transition: none;
+  }
+}
