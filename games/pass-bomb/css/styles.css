@@ -631,3 +631,11 @@ input[type="text"] {
   font-weight: 500;
   line-height: 1.4;
 }
+
+
+/* hidden must beat .curtain { display:flex } on WebKit */
+.curtain[hidden],
+#turn-curtain[hidden],
+#turn-act[hidden] {
+  display: none !important;
+}

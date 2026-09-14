@@ -835,3 +835,11 @@ body.is-measuring {
   .meter-fill { transition: none; }
   .countdown, .score-num { animation: none; }
 }
+
+
+/* hidden must beat .curtain { display:flex } on WebKit */
+.curtain[hidden],
+#turn-curtain[hidden],
+#turn-act[hidden] {
+  display: none !important;
+}

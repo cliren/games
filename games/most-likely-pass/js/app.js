@@ -230,8 +230,16 @@ function showCurtainState() {
 function revealPick() {
   state.curtainOpen = false;
   selectedPick = null;
-  $("turn-curtain").hidden = true;
-  $("turn-act").hidden = false;
+  const curtain = $("turn-curtain");
+  const act = $("turn-act");
+  if (curtain) {
+    curtain.hidden = true;
+    curtain.setAttribute("hidden", "");
+  }
+  if (act) {
+    act.hidden = false;
+    act.removeAttribute("hidden");
+  }
 
   const me = currentPlayer();
   $("pick-who").textContent = me;
@@ -266,6 +274,13 @@ function revealPick() {
   });
   $("btn-pick-done").hidden = true;
   $("btn-pick-done").disabled = true;
+  // Phone: pick UI was below fold after curtain — bring act into view
+  requestAnimationFrame(() => {
+    const act = $("turn-act");
+    if (act && !act.hidden) {
+      act.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  });
   saveDraft();
 }
 

@@ -736,3 +736,11 @@ textarea {
   text-underline-offset: 5px;
   text-decoration-thickness: 2px;
 }
+
+
+/* hidden must beat .curtain { display:flex } on WebKit */
+.curtain[hidden],
+#turn-curtain[hidden],
+#turn-act[hidden] {
+  display: none !important;
+}

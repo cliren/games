@@ -903,3 +903,11 @@ body.playing-arena .topbar {
   font-size: 15px;
   color: var(--ink-soft);
 }
+
+
+/* hidden must beat .curtain { display:flex } on WebKit */
+.curtain[hidden],
+#turn-curtain[hidden],
+#turn-act[hidden] {
+  display: none !important;
+}
