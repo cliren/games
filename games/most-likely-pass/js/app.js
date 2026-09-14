@@ -361,7 +361,7 @@ function computeWrapped() {
     }
   }
 
-  return { counts, magnets, radars, mutuals, max };
+  return { counts, magnets, radars, mutuals, max, min };
 }
 
 function renderWrapped() {
@@ -369,15 +369,26 @@ function renderWrapped() {
   state.phase = "wrapped";
   $("wrapped-prompt").textContent = state.promptText;
 
-  const { counts, magnets, radars, mutuals, max } = computeWrapped();
-  if (!magnets.length) {
+  const { counts, magnets, radars, mutuals, max, min } = computeWrapped();
+  // Fail-soft when no picks (max === 0) or empty magnet list
+  if (!magnets.length || max === 0) {
     $("stat-magnet").textContent = "Nobody this round";
-  } else if (magnets.length > 1 && max > 0) {
-    $("stat-magnet").textContent = "Tie · " + magnets.join(", ");
+  } else if (magnets.length > 1) {
+    $("stat-magnet").textContent =
+      "Tie · " + magnets.join(", ") + " · " + max + " each";
   } else {
-    $("stat-magnet").textContent = magnets.join(", ");
+    $("stat-magnet").textContent =
+      magnets[0] + " · " + max + " pick" + (max === 1 ? "" : "s");
   }
-  $("stat-radar").textContent = radars.length ? radars.join(", ") : "Nobody this round";
+  if (!radars.length || max === 0) {
+    $("stat-radar").textContent = "Nobody this round";
+  } else if (radars.length > 1) {
+    $("stat-radar").textContent =
+      "Tie · " + radars.join(", ") + " · " + min + " each";
+  } else {
+    $("stat-radar").textContent =
+      radars[0] + " · " + min + " pick" + (min === 1 ? "" : "s");
+  }
   $("stat-mutuals").textContent =
     mutuals.length ? mutuals.join(" · ") : "None this round";
 

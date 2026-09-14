@@ -103,9 +103,12 @@ No empty button labels found in HTML. No `font-size: 0` / `line-height: 0` / `te
 | ID | Sev | Issue | Evidence | Fix |
 |----|-----|-------|----------|-----|
 | MLP-BTN-01 | P1 | Curtain CTA used flipping tokens (worked in dark, inconsistent) | `.curtain .btn-primary` | Locked `#FAF8F5` / `#111` for parity |
-| MLP-WIN-01 | — | Wrapped + magnet ties / empty mutuals | `renderWrapped` | Already fail-soft |
+| MLP-BTN-02 | P0 | Dark-mode curtain wall flipped light (`background: var(--ink)` → `#FAFAFA`) so locked light CTA became light-on-light / blank “I’m {name}” on iPhone | `.curtain` + dark `--ink`/`--paper` flip | Curtain locked always-dark `#1C1917` / `#FAF8F5` (title + sub); CTA stays paper-on-ink |
+| MLP-WIN-01 | P1 | Wrapped Magnet/Radar lines omitted pick counts; ties ambiguous on mobile | `renderWrapped` | Magnet/Radar now `Name · N picks` or `Tie · A, B · N each`; fail-soft when `max === 0` |
 
 **Win path:** Reveal → auto Wrapped. Clear.
+
+**Follow-up (dark curtain token flip):** Curtain used `var(--ink)` / `var(--paper)`, which invert under `prefers-color-scheme: dark`. With CTA already locked to `#FAF8F5` bg, dark mode made the pass wall light → blank-looking primary on iPhone. Same always-dark curtain lock applied for parity to blame-chain, wrong-answers-only, pass-bomb, steady-hands, green-flash (not Picture Telephone paper curtain).
 
 ### 7. Wrong Answers Only — `games/wrong-answers-only/`
 

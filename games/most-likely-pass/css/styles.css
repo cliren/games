@@ -427,7 +427,11 @@ input:focus-visible,
 }
 
 .name-row {
+  -webkit-appearance: none;
   appearance: none;
+  -webkit-text-fill-color: currentColor;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   width: 100%;
   min-height: 52px;
   padding: 14px 16px;
@@ -445,6 +449,7 @@ input:focus-visible,
 .name-row.selected {
   background: var(--accent-wash);
   color: var(--ink);
+  -webkit-text-fill-color: var(--ink);
   border-color: var(--accent);
 }
 
@@ -470,8 +475,8 @@ input:focus-visible,
   min-height: calc(100dvh - 48px);
   margin: -16px -16px calc(-24px - var(--safe-bottom));
   padding: 48px 24px calc(32px + var(--safe-bottom));
-  background: var(--ink);
-  color: var(--paper);
+  background: #1C1917;
+  color: #FAF8F5;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -480,7 +485,7 @@ input:focus-visible,
 }
 
 .curtain .title {
-  color: var(--paper);
+  color: #FAF8F5;
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -489,7 +494,7 @@ input:focus-visible,
 .curtain .sub {
   margin: 12px 0 32px;
   font-size: 17px;
-  color: color-mix(in srgb, var(--paper) 70%, transparent);
+  color: color-mix(in srgb, #FAF8F5 70%, transparent);
 }
 
 .curtain .btn-primary {

@@ -426,8 +426,8 @@ textarea {
 }
 
 .curtain {
-  background: var(--ink);
-  color: var(--paper);
+  background: #1C1917;
+  color: #FAF8F5;
   border-radius: var(--radius);
   padding: 40px 24px;
   text-align: center;
@@ -440,12 +440,12 @@ textarea {
 }
 
 .curtain .title {
-  color: inherit;
+  color: #FAF8F5;
   font-size: 28px;
 }
 
 .curtain .lede {
-  color: color-mix(in srgb, var(--paper) 70%, transparent);
+  color: color-mix(in srgb, #FAF8F5 70%, transparent);
   margin: 0;
 }
 
@@ -456,13 +456,6 @@ textarea {
   border-color: #FAF8F5;
   margin-top: 16px;
   min-width: min(280px, 100%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .curtain {
-    background: var(--ink);
-    color: var(--paper);
-  }
 }
 
 /* Pick rows */

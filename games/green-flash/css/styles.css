@@ -602,8 +602,8 @@ input[type="text"] {
 }
 
 .curtain {
-  background: var(--ink);
-  color: var(--paper);
+  background: #1C1917;
+  color: #FAF8F5;
   border-radius: var(--radius);
   padding: 40px 24px;
   text-align: center;
@@ -616,17 +616,17 @@ input[type="text"] {
 }
 
 .curtain .title {
-  color: inherit;
+  color: #FAF8F5;
   font-size: 28px;
 }
 
 .curtain .lede {
-  color: color-mix(in srgb, var(--paper) 70%, transparent);
+  color: color-mix(in srgb, #FAF8F5 70%, transparent);
   margin: 0;
 }
 
 .curtain .caption {
-  color: color-mix(in srgb, var(--paper) 55%, transparent);
+  color: color-mix(in srgb, #FAF8F5 55%, transparent);
 }
 
 .curtain .btn-primary {
