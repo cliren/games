@@ -142,6 +142,7 @@ textarea:focus-visible,
 
 .screen.active {
   display: block;
+  opacity: 1;
   animation: screen-in 150ms ease-out forwards;
 }
 

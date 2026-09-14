@@ -750,7 +750,7 @@ function renderRevealStep() {
   $("#reveal-counter").textContent = `${revealIndex + 1} / ${steps.length}`;
 }
 
-function escapeHtmlfunction escapeHtml(s) {
+function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
