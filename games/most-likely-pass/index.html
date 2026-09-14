@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <meta name="theme-color" content="#FAF8F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#EEF2FF" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="Pass to who fits. Then see who everyone picked." />
   <title>Most Likely Pass</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111111'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-size='22' fill='%23FAF8F5'%3EM%3C/text%3E%3C/svg%3E" />
@@ -19,7 +19,6 @@
   </header>
 
   <div id="app">
-    <!-- HOME -->
     <section id="screen-home" class="screen">
       <header class="brand">
         <h2 class="display">Most Likely Pass</h2>
@@ -31,65 +30,49 @@
       </div>
     </section>
 
-    <!-- NAMES -->
     <section id="screen-names" class="screen">
       <header class="brand">
         <h2 class="title">Who’s playing?</h2>
         <p class="lede caption">3–8 people · same phone</p>
       </header>
       <div class="card">
+        <div class="chips" id="name-chips" aria-live="polite"></div>
         <label class="label" for="name-input">Add a name</label>
         <div class="add-row">
           <input type="text" id="name-input" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam" />
           <button type="button" class="btn btn-sm" id="btn-add-name">Add</button>
         </div>
-        <div class="chips" id="name-chips" aria-live="polite"></div>
         <p class="hint" id="names-hint">Add at least 3 names</p>
         <div class="stack" style="margin-top:16px">
           <button type="button" class="btn btn-primary btn-block" id="btn-names-go" disabled>Start</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-names-shuffle">Shuffle names</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-names-back">Back</button>
         </div>
       </div>
     </section>
 
-    <!-- PROMPT -->
-    <section id="screen-prompt" class="screen">
-      <header class="brand">
-        <h2 class="title">This round</h2>
-      </header>
-      <div class="card">
-        <p class="prompt-box" id="prompt-text">Most likely to…</p>
-        <div class="stack">
-          <button type="button" class="btn btn-primary btn-block" id="btn-prompt-go">Continue</button>
-          <button type="button" class="btn btn-ghost btn-block" id="btn-prompt-shuffle">Shuffle</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- PASS CURTAIN -->
-    <section id="screen-pass" class="screen screen-pass">
-      <div class="curtain">
+    <!-- TURN: curtain state + pick -->
+    <section id="screen-turn" class="screen">
+      <div id="turn-curtain" class="curtain" hidden>
         <h2 class="title" id="pass-title">Pass to Alex</h2>
         <p class="sub">Don’t peek.</p>
         <button type="button" class="btn btn-primary" id="btn-pass-ready">I’m Alex</button>
       </div>
+      <div id="turn-act" hidden>
+        <div class="row spread">
+          <span class="caption" id="pick-who">Your turn</span>
+          <span class="caption" id="pick-progress">1 / 3</span>
+        </div>
+        <p class="prompt-chip" id="pick-prompt">Most likely to…</p>
+        <button type="button" class="btn btn-ghost btn-block" id="btn-turn-shuffle" hidden style="margin-bottom:8px">Shuffle</button>
+        <p class="caption" id="pick-empty">Who fits? Tap to pick.</p>
+        <div class="name-list" id="pick-list" role="listbox" aria-label="Pick who fits"></div>
+        <div class="sticky-cta">
+          <button type="button" class="btn btn-primary btn-block" id="btn-pick-done" disabled hidden>Done</button>
+        </div>
+      </div>
     </section>
 
-    <!-- PICK -->
-    <section id="screen-pick" class="screen">
-      <div class="row spread">
-        <span class="caption" id="pick-who">Your turn</span>
-        <span class="caption" id="pick-progress">1 / 3</span>
-      </div>
-      <p class="prompt-box" id="pick-prompt">Most likely to…</p>
-      <p class="caption" id="pick-empty">Who fits?</p>
-      <div class="name-list" id="pick-list" role="listbox" aria-label="Pick who fits"></div>
-      <div class="sticky-cta">
-        <button type="button" class="btn btn-primary btn-block" id="btn-pick-done" disabled>Done</button>
-      </div>
-    </section>
-
-    <!-- REVEAL -->
     <section id="screen-reveal" class="screen">
       <header class="brand">
         <h2 class="title">Who picked whom</h2>
@@ -110,23 +93,23 @@
       </div>
     </section>
 
-    <!-- WRAPPED -->
     <section id="screen-wrapped" class="screen">
       <header class="brand">
-        <h2 class="title">Wrapped</h2>
+        <h2 class="title">Results</h2>
+        <p class="lede caption">Wrapped</p>
         <p class="lede caption" id="wrapped-prompt"></p>
       </header>
       <div class="card">
-        <div class="stat-block">
-          <p class="stat-label">Phone Magnet</p>
+        <div class="stat-block magnet">
+          <p class="stat-label">1 · Phone Magnet</p>
           <p class="stat-value" id="stat-magnet">—</p>
         </div>
         <div class="stat-block">
-          <p class="stat-label">Under the Radar</p>
+          <p class="stat-label">2 · Under the Radar</p>
           <p class="stat-value" id="stat-radar">—</p>
         </div>
-        <div class="stat-block">
-          <p class="stat-label">Mutuals</p>
+        <div class="stat-block mutuals">
+          <p class="stat-label">3 · Mutuals</p>
           <p class="stat-value" id="stat-mutuals">None this round</p>
         </div>
         <ul class="tally" id="tally-list" aria-label="Pick counts"></ul>

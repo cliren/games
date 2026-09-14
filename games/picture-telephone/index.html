@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <meta name="theme-color" content="#FAF8F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#FFF1F0" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
   <meta name="description" content="Draw. Pass in the app. Ruin it together." />
   <title>Picture Telephone</title>
@@ -58,9 +58,6 @@
         <h2 class="title">New game</h2>
       </header>
       <div class="card">
-        <label class="label" for="player-name">Your name</label>
-        <input type="text" id="player-name" maxlength="24" autocomplete="nickname" placeholder="e.g. Sam" />
-
         <span class="label">How many players?</span>
         <div class="count-picker" role="group" aria-label="Player count">
           <button type="button" data-n="1">1</button>
@@ -73,6 +70,18 @@
           <button type="button" data-n="8">8</button>
         </div>
         <p class="hint" id="count-hint">3 players · 3 turns</p>
+
+        <div id="solo-name-wrap">
+          <label class="label" for="player-name">Your name</label>
+          <input type="text" id="player-name" maxlength="24" autocomplete="nickname" placeholder="e.g. Sam" />
+        </div>
+
+        <div id="roster-wrap" hidden>
+          <span class="label">Player names</span>
+          <div class="roster-list" id="roster-list" aria-live="polite"></div>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-shuffle-names" style="margin-top:8px">Shuffle names</button>
+          <p class="hint">Edit any seat or shuffle for new stand-ins.</p>
+        </div>
 
         <div id="solo-turns-wrap" hidden>
           <span class="label">How many turns?</span>
@@ -92,7 +101,7 @@
         <input type="text" id="custom-prompt" maxlength="120" placeholder="Optional custom prompt" />
 
         <div class="stack" style="margin-top:16px">
-          <button type="button" class="btn btn-primary btn-block" id="btn-setup-go">Draw the prompt</button>
+          <button type="button" class="btn btn-primary btn-block" id="btn-setup-go">Start drawing</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-setup-back">Back</button>
         </div>
       </div>

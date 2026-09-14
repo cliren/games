@@ -9,6 +9,11 @@
   --cta: #111111;
   --cta-label: #FFFFFF;
   --focus: #1C1917;
+  --accent: #2DD4BF;
+  --accent-ink: #115E59;
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
+  --prompt-chip: color-mix(in srgb, var(--accent) 16%, var(--paper));
+  --prompt-chip-ink: var(--accent-ink);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --radius: 14px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -25,6 +30,11 @@
     --cta: #FAFAFA;
     --cta-label: #0A0A0A;
     --focus: #FAFAFA;
+    --accent: #14B8A6;
+    --accent-ink: #ECFDF5;
+    --accent-wash: color-mix(in srgb, var(--accent) 18%, transparent);
+    --prompt-chip: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    --prompt-chip-ink: var(--accent-ink);
   }
 }
 
@@ -322,9 +332,22 @@ textarea {
   z-index: 5;
 }
 
+.prompt-chip {
+  background: var(--prompt-chip);
+  color: var(--prompt-chip-ink);
+  border: none;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
 .prompt-box {
-  background: var(--surface);
-  border: 1.5px solid var(--ink);
+  color: var(--prompt-chip-ink);
+  background: var(--prompt-chip);
+  border: none;
   border-radius: 12px;
   padding: 14px 16px;
   font-size: 17px;
@@ -464,8 +487,9 @@ textarea {
 }
 
 .pick-row.selected {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--accent-wash);
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 .pill {
@@ -574,6 +598,12 @@ textarea {
   font-weight: 500;
 }
 
+.board-main {
+  border-left: 4px solid var(--accent);
+  padding-left: 12px;
+  margin-left: -4px;
+}
+
 .board-main .board-name {
   font-weight: 700;
 }
@@ -655,4 +685,59 @@ textarea {
   .curtain .title {
     font-size: 24px;
   }
+}
+
+/* Editable name chip inputs */
+.chip--edit {
+  cursor: default;
+  padding: 4px 8px 4px 12px;
+}
+.chip--edit input {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  width: 7.5em;
+  max-width: 40vw;
+  min-width: 4em;
+  padding: 4px 0;
+  outline: none;
+}
+.chip--edit .chip-x {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+}
+
+
+#turn-curtain.curtain {
+  min-height: calc(100dvh - 48px);
+  margin: -16px -16px calc(-24px - var(--safe-bottom));
+  padding: 48px 24px calc(32px + var(--safe-bottom));
+}
+
+/* Accent chrome (hub-tile match) */
+.topbar {
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.topbar-title {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 5px;
+  text-decoration-thickness: 2px;
 }

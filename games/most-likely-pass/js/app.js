@@ -1,19 +1,18 @@
 /**
- * Most Likely Pass — hotseat pick loop + reveal + Wrapped.
- * Seat order is fixed; picks are votes, not pass targets.
+ * Most Likely Pass — curtain-as-state, tap-commit, auto Wrapped, fun names.
  */
 import { pickPrompt } from "./prompts.js";
 import { initHowto } from "./howto.js";
+import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const DRAFT_KEY = "most-likely-pass:draft:v1";
 const MAX_PLAYERS = 8;
 const MIN_PLAYERS = 3;
 
-/** @typedef {{ v:1, names:string[], promptId:string, promptText:string, picks:{from:string,to:string}[], phase:string, turnIndex:number, revealIndex:number, shuffled?:boolean }} State */
+/** @typedef {{ v:1, names:string[], promptId:string, promptText:string, picks:{from:string,to:string}[], phase:string, turnIndex:number, revealIndex:number, curtainOpen:boolean, shuffled?:boolean }} State */
 
 /** @type {State} */
 let state = freshState();
-
 /** @type {string|null} */
 let selectedPick = null;
 let shuffleUsed = false;
@@ -23,9 +22,7 @@ const $ = (id) => document.getElementById(id);
 const screens = {
   home: $("screen-home"),
   names: $("screen-names"),
-  prompt: $("screen-prompt"),
-  pass: $("screen-pass"),
-  pick: $("screen-pick"),
+  turn: $("screen-turn"),
   reveal: $("screen-reveal"),
   wrapped: $("screen-wrapped"),
 };
@@ -40,6 +37,7 @@ function freshState() {
     phase: "home",
     turnIndex: 0,
     revealIndex: 0,
+    curtainOpen: false,
     shuffled: false,
   };
 }
@@ -81,10 +79,14 @@ function showScreen(name) {
     if (!el) return;
     el.classList.toggle("active", key === name);
   });
-  // Unmount private pick UI when leaving pick (curtain privacy)
-  if (name !== "pick") {
-    $("pick-list").innerHTML = "";
+  if (name !== "turn") {
+    const list = $("pick-list");
+    if (list) list.innerHTML = "";
     selectedPick = null;
+    const curtain = $("turn-curtain");
+    const act = $("turn-act");
+    if (curtain) curtain.hidden = true;
+    if (act) act.hidden = true;
   }
 }
 
@@ -92,7 +94,6 @@ function currentPlayer() {
   return state.names[state.turnIndex] || "";
 }
 
-/* —— Home —— */
 function renderHome() {
   showScreen("home");
   const draft = loadDraft();
@@ -109,7 +110,6 @@ function renderHome() {
   state.phase = "home";
 }
 
-/* —— Names —— */
 function renderNames() {
   showScreen("names");
   state.phase = "names";
@@ -137,7 +137,7 @@ function renderNames() {
   const hint = $("names-hint");
   const go = $("btn-names-go");
   if (n < MIN_PLAYERS) {
-    hint.textContent = "Add at least 3 names";
+    hint.textContent = "Add at least 3 names · or Shuffle";
     hint.classList.add("warn");
     go.disabled = true;
   } else if (n >= MAX_PLAYERS) {
@@ -145,7 +145,7 @@ function renderNames() {
     hint.classList.remove("warn");
     go.disabled = false;
   } else {
-    hint.textContent = `${n} players`;
+    hint.textContent = `${n} players · Shuffle for new fun names`;
     hint.classList.remove("warn");
     go.disabled = false;
   }
@@ -171,61 +171,76 @@ function addName() {
   input.focus();
 }
 
-/* —— Prompt —— */
-function startPrompt(keepNames) {
-  const names = keepNames ? state.names.slice() : state.names.slice();
-  const p = pickPrompt();
-  state = {
-    v: 1,
-    names,
-    promptId: p.id,
-    promptText: p.text,
-    picks: [],
-    phase: "prompt",
-    turnIndex: 0,
-    revealIndex: 0,
-    shuffled: false,
-  };
-  shuffleUsed = false;
+function shuffleNames() {
+  const count = Math.max(state.names.length, defaultPlayerCount());
+  state.names = generateFunNames(Math.min(count, MAX_PLAYERS));
+  renderNames();
+}
+
+function startRound(keepPrompt = false) {
+  if (!keepPrompt || !state.promptText) {
+    const p = pickPrompt();
+    state.promptId = p.id;
+    state.promptText = p.text;
+    state.shuffled = false;
+    shuffleUsed = false;
+  }
+  state.picks = [];
+  state.turnIndex = 0;
+  state.revealIndex = 0;
+  state.curtainOpen = false;
+  state.phase = "turn";
   selectedPick = null;
-  renderPrompt();
+  saveDraft();
+  showTurn();
+}
+
+function showTurn() {
+  state.phase = "turn";
+  showScreen("turn");
+  if (state.turnIndex === 0) {
+    state.curtainOpen = false;
+    revealPick();
+  } else if (state.curtainOpen) {
+    showCurtainState();
+  } else {
+    revealPick();
+  }
   saveDraft();
 }
 
-function renderPrompt() {
-  showScreen("prompt");
-  state.phase = "prompt";
-  $("prompt-text").textContent = state.promptText;
-  $("btn-prompt-shuffle").hidden = !!state.shuffled || shuffleUsed;
-  saveDraft();
-}
-
-/* —— Pass (curtain) —— */
-function goPass() {
-  state.phase = "pass";
+function showCurtainState() {
+  state.curtainOpen = true;
   selectedPick = null;
-  showScreen("pass");
+  const list = $("pick-list");
+  if (list) list.innerHTML = "";
+  $("turn-curtain").hidden = false;
+  $("turn-act").hidden = true;
   const name = currentPlayer();
   $("pass-title").textContent = `Pass to ${name}`;
   $("btn-pass-ready").textContent = `I’m ${name}`;
   saveDraft();
 }
 
-/* —— Pick —— */
-function renderPick() {
-  state.phase = "pick";
+function revealPick() {
+  state.curtainOpen = false;
   selectedPick = null;
-  showScreen("pick");
+  $("turn-curtain").hidden = true;
+  $("turn-act").hidden = false;
+
   const me = currentPlayer();
   $("pick-who").textContent = me;
   $("pick-progress").textContent = `${state.turnIndex + 1} / ${state.names.length}`;
   $("pick-prompt").textContent = state.promptText;
-  $("pick-empty").textContent = "Who fits?";
+  $("pick-empty").textContent = "Who fits? Tap to pick.";
+
+  const canShuffle = state.turnIndex === 0 && !state.shuffled && !shuffleUsed && state.picks.length === 0;
+  $("btn-turn-shuffle").hidden = !canShuffle;
 
   const list = $("pick-list");
   list.innerHTML = "";
   state.names.forEach((name) => {
-    if (name === me) return; // no self-pick
+    if (name === me) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "name-row";
@@ -239,10 +254,12 @@ function renderPick() {
         el.classList.toggle("selected", on);
         el.setAttribute("aria-selected", on ? "true" : "false");
       });
-      $("btn-pick-done").disabled = false;
+      // Tap-commit
+      commitPick();
     });
     list.appendChild(btn);
   });
+  $("btn-pick-done").hidden = true;
   $("btn-pick-done").disabled = true;
   saveDraft();
 }
@@ -253,21 +270,22 @@ function commitPick() {
   if (selectedPick === from) return;
   state.picks.push({ from, to: selectedPick });
   selectedPick = null;
-  $("pick-list").innerHTML = ""; // unmount before curtain
+  $("pick-list").innerHTML = "";
 
   if (state.turnIndex + 1 >= state.names.length) {
-    state.turnIndex = 0;
     state.revealIndex = 0;
     state.phase = "reveal";
+    state.curtainOpen = false;
     renderReveal();
   } else {
     state.turnIndex += 1;
-    goPass();
+    state.curtainOpen = true;
+    state.phase = "turn";
+    showCurtainState();
   }
   saveDraft();
 }
 
-/* —— Reveal —— */
 function renderReveal() {
   showScreen("reveal");
   state.phase = "reveal";
@@ -284,12 +302,9 @@ function renderReveal() {
   }
 
   $("btn-reveal-prev").disabled = i === 0;
-  const next = $("btn-reveal-next");
+  $("btn-reveal-next").textContent = "Next";
   if (i >= total - 1) {
-    next.textContent = "Wrapped";
     $("btn-show-all").hidden = total <= 1;
-  } else {
-    next.textContent = "Next";
   }
   saveDraft();
 }
@@ -312,7 +327,6 @@ function showAllPicks() {
   $("btn-show-all").hidden = true;
 }
 
-/* —— Wrapped —— */
 function computeWrapped() {
   /** @type {Record<string, number>} */
   const counts = {};
@@ -380,7 +394,6 @@ function renderWrapped() {
   clearDraft();
 }
 
-/* —— Resume —— */
 function resumeFromDraft(draft) {
   state = {
     v: 1,
@@ -391,23 +404,21 @@ function resumeFromDraft(draft) {
     phase: draft.phase,
     turnIndex: draft.turnIndex | 0,
     revealIndex: draft.revealIndex | 0,
+    curtainOpen: !!draft.curtainOpen,
     shuffled: !!draft.shuffled,
   };
   shuffleUsed = !!state.shuffled;
   selectedPick = null;
 
-  // Never resume onto a private pick screen — land on curtain for that seat
-  if (state.phase === "pick") {
-    goPass();
+  if (["prompt", "pass", "pick"].includes(state.phase)) {
+    state.phase = "turn";
+    state.curtainOpen = state.turnIndex > 0;
+  }
+  if (state.phase === "turn") {
+    showTurn();
     return;
   }
   switch (state.phase) {
-    case "prompt":
-      renderPrompt();
-      break;
-    case "pass":
-      goPass();
-      break;
     case "reveal":
       renderReveal();
       break;
@@ -419,7 +430,6 @@ function resumeFromDraft(draft) {
   }
 }
 
-/* —— Wire —— */
 function init() {
   const howto = initHowto({
     overlay: $("howto-overlay"),
@@ -432,6 +442,7 @@ function init() {
   $("btn-start").addEventListener("click", () => {
     state = freshState();
     clearDraft();
+    state.names = generateFunNames(defaultPlayerCount());
     renderNames();
   });
 
@@ -448,38 +459,28 @@ function init() {
     }
   });
 
-  $("btn-names-back").addEventListener("click", () => {
-    renderHome();
-  });
-
+  $("btn-names-back").addEventListener("click", () => renderHome());
+  $("btn-names-shuffle").addEventListener("click", shuffleNames);
   $("btn-names-go").addEventListener("click", () => {
     if (state.names.length < MIN_PLAYERS) return;
-    startPrompt(true);
+    startRound(false);
   });
 
-  $("btn-prompt-go").addEventListener("click", () => {
-    state.turnIndex = 0;
-    state.picks = [];
-    goPass();
-  });
+  $("btn-pass-ready").addEventListener("click", () => revealPick());
 
-  $("btn-prompt-shuffle").addEventListener("click", () => {
+  $("btn-turn-shuffle").addEventListener("click", () => {
     if (state.shuffled || shuffleUsed) return;
     const p = pickPrompt();
     state.promptId = p.id;
     state.promptText = p.text;
     state.shuffled = true;
     shuffleUsed = true;
-    renderPrompt();
+    $("pick-prompt").textContent = state.promptText;
+    $("btn-turn-shuffle").hidden = true;
+    saveDraft();
   });
 
-  $("btn-pass-ready").addEventListener("click", () => {
-    renderPick();
-  });
-
-  $("btn-pick-done").addEventListener("click", () => {
-    commitPick();
-  });
+  $("btn-pick-done").addEventListener("click", commitPick);
 
   $("btn-reveal-prev").addEventListener("click", () => {
     if (state.revealIndex > 0) {
@@ -489,6 +490,7 @@ function init() {
   });
 
   $("btn-reveal-next").addEventListener("click", () => {
+    // Last Next → auto Wrapped (no separate See Wrapped)
     if (state.revealIndex >= state.picks.length - 1) {
       renderWrapped();
       return;
@@ -503,12 +505,13 @@ function init() {
     const names = state.names.slice();
     state = freshState();
     state.names = names;
-    startPrompt(true);
+    startRound(false);
   });
 
   $("btn-new-game").addEventListener("click", () => {
     state = freshState();
     clearDraft();
+    state.names = generateFunNames(defaultPlayerCount());
     renderNames();
   });
 

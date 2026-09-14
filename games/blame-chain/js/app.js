@@ -1,5 +1,6 @@
 import { randomPrompt } from "./prompts.js";
 import { initHowto } from "./howto.js";
+import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const DRAFT_KEY = "blame-chain:draft:v1";
 const MIN_NAMES = 3;
@@ -15,7 +16,8 @@ const ALIBI_MAX = 80;
  *  turnIndex: number,
  *  pendingBlamed: string,
  *  entries: Array<{ from: string, blamed: string, alibi: string }>,
- *  phase: "home"|"names"|"prompt"|"pass"|"blame"|"alibi"|"reveal"|"board",
+ *  phase: "home"|"names"|"turn"|"reveal"|"board",
+ *  curtainOpen: boolean,
  *  revealIndex: number,
  *  shuffledOnce: boolean,
  * }} BlameGame */
@@ -38,6 +40,7 @@ function emptyState() {
     pendingBlamed: "",
     entries: [],
     phase: "home",
+    curtainOpen: false,
     revealIndex: 0,
     shuffledOnce: false,
   };
@@ -73,10 +76,7 @@ function clearDraft() {
 
 function showScreen(id) {
   $$(".screen").forEach((el) => el.classList.remove("active"));
-  // Unmount private turn content when leaving blame/alibi
-  if (id === "pass" || id === "home" || id === "names" || id === "prompt") {
-    clearPrivateTurnDom();
-  }
+  if (id !== "turn") clearPrivateTurnDom();
   const screen = document.getElementById("screen-" + id);
   if (screen) screen.classList.add("active");
   window.scrollTo({ top: 0, behavior: "auto" });
@@ -89,10 +89,22 @@ function clearPrivateTurnDom() {
   if (alibi) alibi.value = "";
   const hint = $("#blame-hint");
   if (hint) hint.textContent = "Tap who did it";
+  const curtain = $("#turn-curtain");
+  const act = $("#turn-act");
+  if (curtain) curtain.hidden = true;
+  if (act) act.hidden = true;
 }
 
 function currentName() {
   return state.names[state.turnIndex] || "";
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 /* ---------- Home ---------- */
@@ -109,36 +121,29 @@ function showHome() {
     draft.phase !== "home" &&
     draft.phase !== "board";
   resume.hidden = !resumable;
-  // Only one primary: Start. Resume is ghost.
 }
 
 function resumeDraft() {
   const draft = loadDraft();
   if (!draft) return;
   state = { ...emptyState(), ...draft, v: 1 };
+  // Migrate old phases
+  if (["prompt", "pass", "blame", "alibi"].includes(state.phase)) {
+    state.pendingBlamed = "";
+    state.phase = "turn";
+    state.curtainOpen = state.turnIndex > 0;
+    saveDraft();
+  }
   routeFromPhase();
 }
 
 function routeFromPhase() {
   switch (state.phase) {
     case "names":
-      showNames();
+      showNames(true);
       break;
-    case "prompt":
-      showPrompt();
-      break;
-    case "pass":
-      showPass();
-      break;
-    case "blame":
-      showBlame();
-      break;
-    case "alibi":
-      // Privacy: never resume mid-alibi showing prior pick on shared phone — go to pass for that turn
-      state.pendingBlamed = "";
-      state.phase = "pass";
-      saveDraft();
-      showPass();
+    case "turn":
+      showTurn({ resume: true });
       break;
     case "reveal":
       showReveal();
@@ -156,6 +161,7 @@ function showNames(keepNames = false) {
   if (!keepNames) {
     state = emptyState();
     state.phase = "names";
+    state.names = generateFunNames(defaultPlayerCount());
   } else {
     state.phase = "names";
   }
@@ -187,8 +193,7 @@ function renderNameChips() {
 }
 
 function updateStartEnabled() {
-  const btn = $("#btn-names-start");
-  btn.disabled = state.names.length < MIN_NAMES;
+  $("#btn-names-start").disabled = state.names.length < MIN_NAMES;
 }
 
 function addName() {
@@ -210,77 +215,105 @@ function addName() {
   input.focus();
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function shuffleNames() {
+  const count = Math.max(state.names.length, defaultPlayerCount());
+  state.names = generateFunNames(Math.min(count, MAX_NAMES));
+  saveDraft();
+  renderNameChips();
+  updateStartEnabled();
 }
 
-/* ---------- Prompt ---------- */
-function showPrompt() {
-  state.phase = "prompt";
+function ensurePrompt() {
   if (!state.promptText) {
     const p = randomPrompt();
     state.promptId = p.id;
     state.promptText = p.text;
     state.shuffledOnce = false;
   }
-  saveDraft();
-  showScreen("prompt");
-  $("#prompt-text").textContent = state.promptText;
-  const shuffle = $("#btn-shuffle");
-  shuffle.hidden = state.shuffledOnce;
 }
 
-function shufflePrompt() {
+function startRound() {
+  ensurePrompt();
+  state.turnIndex = 0;
+  state.entries = [];
+  state.pendingBlamed = "";
+  state.revealIndex = 0;
+  state.phase = "turn";
+  state.curtainOpen = false; // player 1 skips curtain
+  saveDraft();
+  showTurn();
+}
+
+function shufflePromptOnce() {
   if (state.shuffledOnce) return;
   const p = randomPrompt();
   state.promptId = p.id;
   state.promptText = p.text;
   state.shuffledOnce = true;
   saveDraft();
-  $("#prompt-text").textContent = state.promptText;
-  $("#btn-shuffle").hidden = true;
+  $("#blame-prompt").textContent = state.promptText;
+  $("#btn-turn-shuffle").hidden = true;
 }
 
-function startRoundFromPrompt() {
-  state.turnIndex = 0;
-  state.entries = [];
-  state.pendingBlamed = "";
-  state.revealIndex = 0;
-  state.phase = "pass";
+/* ---------- Turn (curtain state + blame+alibi) ---------- */
+function showTurn({ resume = false } = {}) {
+  state.phase = "turn";
+  ensurePrompt();
   saveDraft();
-  showPass();
+  showScreen("turn");
+
+  // Player 1 always skips curtain; others need curtain until I'm {name}
+  if (state.turnIndex === 0) {
+    state.curtainOpen = false;
+    revealAct();
+  } else if (state.curtainOpen) {
+    showCurtainState();
+  } else {
+    revealAct();
+  }
 }
 
-/* ---------- Pass curtain ---------- */
-function showPass() {
-  state.phase = "pass";
+function showCurtainState() {
+  state.curtainOpen = true;
   state.pendingBlamed = "";
   saveDraft();
-  clearPrivateTurnDom();
-  showScreen("pass");
+  clearActFields();
   const name = currentName();
+  $("#turn-curtain").hidden = false;
+  $("#turn-act").hidden = true;
   $("#pass-title").innerHTML = `Pass to <strong>${escapeHtml(name)}</strong>`;
   $("#pass-sub").textContent = "Don't peek.";
   $("#btn-im").textContent = `I'm ${name}`;
 }
 
-/* ---------- Blame ---------- */
-function showBlame() {
-  state.phase = "blame";
+function clearActFields() {
+  const list = $("#blame-list");
+  if (list) list.innerHTML = "";
+  const alibi = $("#alibi-input");
+  if (alibi) alibi.value = "";
+  state.pendingBlamed = "";
+}
+
+function revealAct() {
+  state.curtainOpen = false;
+  state.phase = "turn";
   saveDraft();
-  showScreen("blame");
+  $("#turn-curtain").hidden = true;
+  $("#turn-act").hidden = false;
+
   $("#blame-prompt").textContent = state.promptText;
   $("#blame-who").textContent = currentName();
   $("#blame-progress").textContent = `${state.turnIndex + 1} / ${state.names.length}`;
+
+  // Shuffle prompt only on first player's first look
+  const canShuffle = state.turnIndex === 0 && !state.shuffledOnce && state.entries.length === 0;
+  $("#btn-turn-shuffle").hidden = !canShuffle;
+
   const list = $("#blame-list");
   list.innerHTML = "";
   const me = currentName();
   state.names.forEach((name) => {
-    if (name === me) return; // no self-blame
+    if (name === me) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "pick-row" + (state.pendingBlamed === name ? " selected" : "");
@@ -290,44 +323,32 @@ function showBlame() {
       $$("#blame-list .pick-row").forEach((el) =>
         el.classList.toggle("selected", el.textContent === name)
       );
-      $("#btn-blame-done").disabled = false;
+      updateTurnDone();
       $("#blame-hint").textContent = `Blaming ${name}`;
     });
     list.appendChild(btn);
   });
-  const has = !!state.pendingBlamed;
-  $("#btn-blame-done").disabled = !has;
-  $("#blame-hint").textContent = has ? `Blaming ${state.pendingBlamed}` : "Tap who did it";
+
+  const alibi = $("#alibi-input");
+  if (!alibi.dataset.wired) {
+    alibi.dataset.wired = "1";
+    alibi.addEventListener("input", updateTurnDone);
+  }
+  if (!state.pendingBlamed) alibi.value = "";
+  updateTurnDone();
+  $("#blame-hint").textContent = state.pendingBlamed
+    ? `Blaming ${state.pendingBlamed}`
+    : "Tap who did it";
 }
 
-function commitBlame() {
-  if (!state.pendingBlamed) return;
-  state.phase = "alibi";
-  saveDraft();
-  showAlibi();
-}
-
-/* ---------- Alibi ---------- */
-function showAlibi() {
-  state.phase = "alibi";
-  saveDraft();
-  showScreen("alibi");
-  $("#alibi-prompt").textContent = state.promptText;
-  $("#alibi-blamed").textContent = state.pendingBlamed;
-  const input = $("#alibi-input");
-  input.value = "";
-  input.focus();
-  updateAlibiDone();
-}
-
-function updateAlibiDone() {
-  const v = ($("#alibi-input").value || "").trim();
-  $("#btn-alibi-done").disabled = v.length < 1;
+function updateTurnDone() {
+  const alibi = ($("#alibi-input").value || "").trim();
   const n = ($("#alibi-input").value || "").length;
   $("#alibi-count").textContent = `${n}/${ALIBI_MAX}`;
+  $("#btn-turn-done").disabled = !(state.pendingBlamed && alibi.length >= 1);
 }
 
-function commitAlibi() {
+function commitTurn() {
   const alibi = ($("#alibi-input").value || "").trim().slice(0, ALIBI_MAX);
   if (!alibi || !state.pendingBlamed) return;
   state.entries.push({
@@ -336,17 +357,20 @@ function commitAlibi() {
     alibi,
   });
   state.pendingBlamed = "";
-  clearPrivateTurnDom();
+  clearActFields();
+
   if (state.turnIndex + 1 >= state.names.length) {
     state.phase = "reveal";
     state.revealIndex = 0;
+    state.curtainOpen = false;
     saveDraft();
     showReveal();
   } else {
     state.turnIndex += 1;
-    state.phase = "pass";
+    state.curtainOpen = true;
+    state.phase = "turn";
     saveDraft();
-    showPass();
+    showCurtainState();
   }
 }
 
@@ -376,7 +400,7 @@ function renderRevealStep() {
   body.appendChild(card);
 
   const atEnd = i >= total - 1;
-  $("#btn-reveal-next").textContent = atEnd ? "Blame board" : "Next";
+  $("#btn-reveal-next").textContent = "Next";
   $("#btn-reveal-prev").disabled = i === 0;
   $("#btn-show-all").hidden = !(atEnd && total > 1);
 }
@@ -411,7 +435,7 @@ function showAllAccusations() {
     body.appendChild(row);
   });
   $("#reveal-counter").textContent = `All · ${state.entries.length}`;
-  $("#btn-reveal-next").textContent = "Blame board";
+  $("#btn-reveal-next").textContent = "Next";
   $("#btn-show-all").hidden = true;
 }
 
@@ -432,6 +456,13 @@ function showBoard() {
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   const topCount = ranked[0] ? ranked[0].count : 0;
+  const mains = ranked.filter((r) => r.count === topCount && topCount > 0).map((r) => r.name);
+  const sub = $("#board-sub");
+  if (sub) {
+    sub.textContent = mains.length
+      ? "Main suspect: " + mains.join(", ") + " · " + topCount + (topCount === 1 ? " blame" : " blames")
+      : "No blames this round";
+  }
   const list = $("#board-list");
   list.innerHTML = "";
   let lastCount = null;
@@ -464,13 +495,11 @@ function anotherRound() {
   const names = [...state.names];
   state = emptyState();
   state.names = names;
-  state.phase = "prompt";
   const p = randomPrompt();
   state.promptId = p.id;
   state.promptText = p.text;
   state.shuffledOnce = false;
-  saveDraft();
-  showPrompt();
+  startRound();
 }
 
 function newGame() {
@@ -504,24 +533,20 @@ function init() {
     state.promptId = "";
     state.promptText = "";
     state.shuffledOnce = false;
-    showPrompt();
+    startRound();
   });
+  $("#btn-names-shuffle").addEventListener("click", shuffleNames);
   $("#btn-names-back").addEventListener("click", () => {
     clearDraft();
     showHome();
   });
 
-  $("#btn-shuffle").addEventListener("click", shufflePrompt);
-  $("#btn-prompt-go").addEventListener("click", startRoundFromPrompt);
-
   $("#btn-im").addEventListener("click", () => {
     state.pendingBlamed = "";
-    showBlame();
+    revealAct();
   });
-
-  $("#btn-blame-done").addEventListener("click", commitBlame);
-  $("#btn-alibi-done").addEventListener("click", commitAlibi);
-  $("#alibi-input").addEventListener("input", updateAlibiDone);
+  $("#btn-turn-done").addEventListener("click", commitTurn);
+  $("#btn-turn-shuffle").addEventListener("click", shufflePromptOnce);
 
   $("#btn-reveal-next").addEventListener("click", revealNext);
   $("#btn-reveal-prev").addEventListener("click", revealPrev);

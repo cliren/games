@@ -30,6 +30,7 @@ let previewCanvas = null;
 let revealIndex = 0;
 let pendingName = "";
 let showAllReveal = false;
+let showingResults = false;
 /** @type {ReturnType<typeof initHowto> | null} */
 let howto = null;
 let qrRendered = false;
@@ -432,12 +433,81 @@ function beginJoinedTurn() {
   startPendingTurn();
 }
 
+
+/* ---------- Prompt validation (simple token overlap) ---------- */
+function normalizePrompt(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizePrompt(s) {
+  return normalizePrompt(s).split(" ").filter(Boolean);
+}
+
+function jaccardTokens(a, b) {
+  const A = new Set(tokenizePrompt(a));
+  const B = new Set(tokenizePrompt(b));
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  return inter / (A.size + B.size - inter);
+}
+
+/** @returns {"nailed"|"close"|"sideways"} */
+function scorePromptMatch(original, finalText) {
+  const nO = normalizePrompt(original);
+  const nF = normalizePrompt(finalText);
+  if (!nO || !nF) return "sideways";
+  if (nF === nO || nF.includes(nO) || nO.includes(nF)) return "nailed";
+  const j = jaccardTokens(nO, nF);
+  if (j >= 0.5) return "close";
+  const origTokens = tokenizePrompt(nO);
+  const finalSet = new Set(tokenizePrompt(nF));
+  const shared = origTokens.filter((t) => finalSet.has(t)).length;
+  if (origTokens.length && shared / origTokens.length >= 0.5) return "close";
+  return "sideways";
+}
+
+/**
+ * Ended-with: last text in chain; if chain ends on draw, previous description + final drawing note.
+ * @returns {{ text: string, finalDrawing: boolean }}
+ */
+function getEndedWith() {
+  const chain = state.chain || [];
+  if (!chain.length) return { text: "", finalDrawing: false };
+  const last = chain[chain.length - 1];
+  if (last.t === "g") {
+    return { text: last.x || "", finalDrawing: false };
+  }
+  // ends on drawing — use previous description
+  for (let i = chain.length - 2; i >= 0; i--) {
+    if (chain[i].t === "g") {
+      return { text: chain[i].x || "", finalDrawing: true };
+    }
+  }
+  // no description in chain (prompt → draw only)
+  return { text: "", finalDrawing: true };
+}
+
+function verdictLabel(score) {
+  if (score === "nailed") return "Nailed it";
+  if (score === "close") return "Close";
+  return "Went sideways";
+}
+
 /* ---------- Reveal ---------- */
 function startReveal() {
   destroyCanvases();
   revealIndex = 0;
   showAllReveal = false;
+  showingResults = false;
   showScreen("reveal");
+  const title = document.querySelector("#screen-reveal .title");
+  if (title) title.textContent = "The chain";
   $("#btn-show-all").hidden = false;
   $("#reveal-end-actions").hidden = true;
   renderRevealStep();
@@ -477,13 +547,20 @@ function revealSteps() {
   return steps;
 }
 
-function renderRevealStep() {
-  const steps = revealSteps();
+function renderResultsPanel(includeChain = false) {
   const root = $("#reveal-body");
-  destroyCanvases();
+  const title = document.querySelector("#screen-reveal .title");
+  if (title) title.textContent = "Results";
+  const started = state.prompt || "";
+  const ended = getEndedWith();
+  // Validate against last text (or empty → sideways)
+  const compareText = ended.text || "";
+  const score = scorePromptMatch(started, compareText);
+  const verdict = verdictLabel(score);
 
-  if (showAllReveal) {
-    let html = "";
+  let html = "";
+  if (includeChain) {
+    const steps = revealSteps();
     steps.forEach((step, i) => {
       html += `<div class="reveal-step" style="margin-bottom:20px">
         <div class="tag">${i + 1}/${steps.length} · ${step.tag}</div>
@@ -495,20 +572,73 @@ function renderRevealStep() {
       }
       html += `</div>`;
     });
-    root.innerHTML = html;
+  }
+
+  html += `<div class="results-panel">
+    <p class="results-heading">Results</p>
+    <div class="results-block">
+      <p class="results-label">Started with</p>
+      <p class="results-started">${escapeHtml(started)}</p>
+    </div>
+    <div class="results-block">
+      <p class="results-label">Ended with</p>
+      <p class="results-ended">${
+        compareText
+          ? escapeHtml(compareText)
+          : "<em>No description</em>"
+      }${
+        ended.finalDrawing
+          ? '<span class="results-ended-note">+ final drawing</span>'
+          : ""
+      }</p>
+    </div>
+    <div class="results-block">
+      <p class="results-label">Validation</p>
+      <span class="results-verdict ${score}">${escapeHtml(verdict)}</span>
+    </div>
+  </div>`;
+
+  root.innerHTML = html;
+  if (includeChain) {
+    const steps = revealSteps();
     steps.forEach((step, i) => {
       if (step.kind === "draw") {
         paintStrokesOnCanvas($("#reveal-canvas-" + i), step.strokes);
       }
     });
-    $("#btn-reveal-prev").disabled = true;
-    $("#btn-reveal-next").hidden = true;
-    $("#reveal-end-actions").hidden = false;
-    $("#btn-show-all").hidden = true;
-    $("#reveal-counter").textContent = `All · ${steps.length}`;
-    setProgress(steps.length - 1, steps.length);
+  }
+
+  // Results: Back returns to last chain beat (or stays usable after Show all)
+  $("#btn-reveal-prev").disabled = false;
+  $("#btn-reveal-next").hidden = true;
+  $("#btn-reveal-next").textContent = "Next";
+  $("#reveal-end-actions").hidden = false;
+  $("#btn-show-all").hidden = true;
+  const steps = revealSteps();
+  $("#reveal-counter").textContent = includeChain
+    ? `All · ${steps.length}`
+    : `Results`;
+  setProgress(steps.length, steps.length);
+}
+
+function renderRevealStep() {
+  const steps = revealSteps();
+  const root = $("#reveal-body");
+  destroyCanvases();
+
+  if (showAllReveal) {
+    showingResults = true;
+    renderResultsPanel(true);
     return;
   }
+
+  if (showingResults) {
+    renderResultsPanel(false);
+    return;
+  }
+
+  const title = document.querySelector("#screen-reveal .title");
+  if (title) title.textContent = "The chain";
 
   const step = steps[revealIndex];
   root.style.opacity = "0";
@@ -539,13 +669,15 @@ function renderRevealStep() {
   setProgress(revealIndex, steps.length);
   $("#btn-reveal-prev").disabled = revealIndex === 0;
   const last = revealIndex >= steps.length - 1;
-  $("#btn-reveal-next").hidden = last;
-  $("#reveal-end-actions").hidden = !last;
+  // On last beat: Next advances to Results
+  $("#btn-reveal-next").hidden = false;
+  $("#btn-reveal-next").textContent = last ? "Results" : "Next";
+  $("#reveal-end-actions").hidden = true;
   $("#btn-show-all").hidden = last;
   $("#reveal-counter").textContent = `${revealIndex + 1} / ${steps.length}`;
 }
 
-function escapeHtml(s) {
+function escapeHtmlfunction escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -706,6 +838,13 @@ function init() {
 
   // Reveal
   $("#btn-reveal-prev").addEventListener("click", () => {
+    if (showingResults) {
+      showingResults = false;
+      showAllReveal = false;
+      revealIndex = Math.max(0, revealSteps().length - 1);
+      renderRevealStep();
+      return;
+    }
     if (revealIndex > 0) {
       revealIndex--;
       renderRevealStep();
@@ -713,13 +852,19 @@ function init() {
   });
   $("#btn-reveal-next").addEventListener("click", () => {
     const steps = revealSteps();
+    if (showingResults) return;
     if (revealIndex < steps.length - 1) {
       revealIndex++;
       renderRevealStep();
+      return;
     }
+    // Last beat → Results
+    showingResults = true;
+    renderRevealStep();
   });
   $("#btn-show-all").addEventListener("click", () => {
     showAllReveal = true;
+    showingResults = true;
     renderRevealStep();
   });
   $("#btn-play-again").addEventListener("click", () => {

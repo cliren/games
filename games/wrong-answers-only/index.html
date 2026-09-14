@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <meta name="theme-color" content="#FAF8F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#FFFBEB" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="Trivia where the right answer loses." />
   <title>Wrong Answers Only</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111111'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='28' fill='%23FAF8F5'%3E%C3%97%3C/text%3E%3C/svg%3E" />
@@ -19,7 +19,6 @@
   </header>
 
   <div id="app">
-    <!-- HOME -->
     <section id="screen-home" class="screen">
       <header class="brand">
         <h2 class="display">Wrong Answers Only</h2>
@@ -31,7 +30,6 @@
       </div>
     </section>
 
-    <!-- NAMES -->
     <section id="screen-names" class="screen">
       <header class="brand">
         <h2 class="title">Who's playing?</h2>
@@ -44,67 +42,60 @@
           <input type="text" id="name-input" maxlength="16" autocomplete="off" placeholder="e.g. Maya" />
           <button type="button" class="btn" id="btn-add-name">Add</button>
         </div>
-        <p class="hint">3–8 names. One person can type for the couch.</p>
+        <p class="hint">3–8 names. Shuffle for fun stand-ins.</p>
         <div class="stack" style="margin-top:16px">
           <button type="button" class="btn btn-primary btn-block" id="btn-names-start" disabled>Start</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-names-shuffle">Shuffle names</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-names-back">Back</button>
         </div>
       </div>
     </section>
 
-    <!-- QUESTION -->
-    <section id="screen-question" class="screen">
-      <header class="brand">
-        <h2 class="title">Question</h2>
-      </header>
-      <div class="card">
-        <div class="prompt-box lg" id="question-text"></div>
-        <div class="stack">
-          <button type="button" class="btn btn-primary btn-block" id="btn-question-go">Continue</button>
-          <button type="button" class="btn btn-ghost btn-block" id="btn-shuffle">Shuffle</button>
+    <!-- WRITE TURN: curtain before typing (privacy); P1 skips -->
+    <section id="screen-write-turn" class="screen">
+      <div id="write-curtain" class="curtain" hidden>
+        <h2 class="title" id="write-pass-title">Pass to <strong>Maya</strong></h2>
+        <p class="lede" id="write-pass-sub">Don't peek.</p>
+        <button type="button" class="btn btn-primary" id="btn-write-im">I'm Maya</button>
+      </div>
+      <div id="write-act" hidden>
+        <div class="row spread">
+          <span class="pill" id="write-who">Maya</span>
+          <span class="caption" id="write-progress">1 / 4</span>
+        </div>
+        <div class="prompt-chip" id="write-question"></div>
+        <button type="button" class="btn btn-ghost btn-block" id="btn-q-shuffle" hidden style="margin-bottom:8px">Shuffle</button>
+        <label class="label" for="write-input">Your wrong answer</label>
+        <textarea id="write-input" maxlength="100" placeholder="Wrong on purpose…" rows="3"></textarea>
+        <p class="hint" id="write-count">0/100</p>
+        <div class="sticky-cta">
+          <button type="button" class="btn btn-primary btn-block" id="btn-write-done" disabled>Done</button>
         </div>
       </div>
     </section>
 
-    <!-- PASS CURTAIN -->
-    <section id="screen-pass" class="screen">
-      <div class="curtain">
-        <h2 class="title" id="pass-title">Pass to <strong>Maya</strong></h2>
-        <p class="lede" id="pass-sub">Don't peek.</p>
-        <button type="button" class="btn btn-primary" id="btn-im">I'm Maya</button>
+    <!-- VOTE TURN: curtain as state; tap-commit -->
+    <section id="screen-vote-turn" class="screen">
+      <div id="vote-curtain" class="curtain" hidden>
+        <h2 class="title" id="vote-pass-title">Pass to <strong>Maya</strong></h2>
+        <p class="lede" id="vote-pass-sub">Don't peek.</p>
+        <button type="button" class="btn btn-primary" id="btn-vote-im">I'm Maya</button>
+      </div>
+      <div id="vote-act" hidden>
+        <div class="row spread">
+          <span class="pill" id="vote-who">Maya</span>
+          <span class="caption" id="vote-progress">1 / 4</span>
+        </div>
+        <h2 class="title" style="margin:8px 0 4px">Funniest wrong answer</h2>
+        <div class="prompt-chip" id="vote-question"></div>
+        <p class="hint">Tap to lock your vote</p>
+        <div class="pick-list" id="vote-list" role="listbox" aria-label="Answers to vote"></div>
+        <div class="sticky-cta">
+          <button type="button" class="btn btn-primary btn-block" id="btn-vote-done" disabled hidden>Lock vote</button>
+        </div>
       </div>
     </section>
 
-    <!-- WRITE -->
-    <section id="screen-write" class="screen">
-      <div class="row spread">
-        <span class="pill" id="write-who">Maya</span>
-        <span class="caption" id="write-progress">1 / 4</span>
-      </div>
-      <div class="prompt-box" id="write-question"></div>
-      <label class="label" for="write-input">Your wrong answer</label>
-      <textarea id="write-input" maxlength="100" placeholder="Wrong on purpose…" rows="3"></textarea>
-      <p class="hint" id="write-count">0/100</p>
-      <div class="sticky-cta">
-        <button type="button" class="btn btn-primary btn-block" id="btn-write-done" disabled>Done</button>
-      </div>
-    </section>
-
-    <!-- VOTE -->
-    <section id="screen-vote" class="screen">
-      <div class="row spread">
-        <span class="pill" id="vote-who">Maya</span>
-        <span class="caption" id="vote-progress">1 / 4</span>
-      </div>
-      <h2 class="title" style="margin:8px 0 4px">Funniest wrong answer</h2>
-      <div class="prompt-box" id="vote-question"></div>
-      <div class="pick-list" id="vote-list" role="listbox" aria-label="Answers to vote"></div>
-      <div class="sticky-cta">
-        <button type="button" class="btn btn-primary btn-block" id="btn-vote-done" disabled>Done</button>
-      </div>
-    </section>
-
-    <!-- PODIUM -->
     <section id="screen-podium" class="screen">
       <header class="brand">
         <h2 class="title">Results</h2>

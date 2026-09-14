@@ -1,4 +1,4 @@
-/* Hub — locked tokens + 1234-style game picker */
+/* Hub — punch panels + 4px rails matching game accents (v4) */
 :root {
   --paper: #FAF8F5;
   --surface: #FFFFFF;
@@ -14,15 +14,20 @@
   --radius: 16px;
   --radius-sm: 10px;
 
-  /* Saturated tile panels (chrome only — not page washes) */
-  --tile-coral: #FF3D2E;
-  --tile-coral-ink: #2A0604;
-  --tile-teal: #00C2A0;
-  --tile-teal-ink: #03241E;
-  --tile-amber: #FFB000;
-  --tile-amber-ink: #2A1A00;
-  --tile-indigo: #3D4CFF;
-  --tile-indigo-ink: #0A0C3D;
+  /* Tile chrome = in-game --accent (Suren lock) */
+  --tile-coral: #F97066;
+  --tile-coral-ink: #7F1D1D;
+  --tile-teal: #2DD4BF;
+  --tile-teal-ink: #115E59;
+  --tile-amber: #FBBF24;
+  --tile-amber-ink: #78350F;
+  --tile-indigo: #818CF8;
+  --tile-indigo-ink: #312E81;
+
+  --accent-pt: var(--tile-coral);
+  --accent-blame: var(--tile-teal);
+  --accent-wao: var(--tile-amber);
+  --accent-mlp: var(--tile-indigo);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,14 +42,14 @@
     --cta-label: #0A0A0A;
     --focus: #FAFAFA;
 
-    --tile-coral: #FF4B3C;
-    --tile-coral-ink: #1A0302;
-    --tile-teal: #00D4B0;
-    --tile-teal-ink: #021C18;
-    --tile-amber: #FFC107;
-    --tile-amber-ink: #1A1200;
-    --tile-indigo: #4F5DFF;
-    --tile-indigo-ink: #07082A;
+    --tile-coral: #E35D5B;
+    --tile-coral-ink: #FEF2F2;
+    --tile-teal: #14B8A6;
+    --tile-teal-ink: #ECFDF5;
+    --tile-amber: #F59E0B;
+    --tile-amber-ink: #FFFBEB;
+    --tile-indigo: #6366F1;
+    --tile-indigo-ink: #EEF2FF;
   }
 }
 
@@ -75,9 +80,7 @@ body {
   min-height: 100dvh;
 }
 
-.hub-header {
-  margin-bottom: 20px;
-}
+.hub-header { margin-bottom: 20px; }
 
 .hub-title {
   margin: 0;
@@ -96,7 +99,6 @@ body {
   color: var(--ink-soft);
 }
 
-/* 2-col grid on phones; 1-col only when very narrow */
 .game-grid {
   list-style: none;
   margin: 0;
@@ -107,16 +109,14 @@ body {
 }
 
 @media (max-width: 340px) {
-  .game-grid {
-    grid-template-columns: 1fr;
-  }
+  .game-grid { grid-template-columns: 1fr; }
 }
 
 .tile {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 260px;
+  min-height: 220px;
   background: var(--surface);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
@@ -128,14 +128,12 @@ body {
 }
 
 .tile--playable {
-  border: 2px solid var(--ink);
+  border-color: var(--ink);
   cursor: pointer;
   transition: opacity 80ms;
 }
 
-.tile--playable:active {
-  opacity: 0.88;
-}
+.tile--playable:active { opacity: 0.88; }
 
 .tile--playable:focus-visible {
   outline: 2px solid var(--focus);
@@ -145,62 +143,41 @@ body {
 .tile--soon {
   opacity: 0.72;
   pointer-events: none;
+  cursor: default;
 }
+
+.tile--coral { border-left: 4px solid var(--tile-coral); }
+.tile--teal { border-left: 4px solid var(--tile-teal); }
+.tile--amber { border-left: 4px solid var(--tile-amber); }
+.tile--indigo { border-left: 4px solid var(--tile-indigo); }
 
 .tile-panel {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  min-height: 110px;
-  height: 110px;
-  color: var(--ink);
+  height: 88px;
+  color: inherit;
 }
 
 .tile--coral .tile-panel {
   background: var(--tile-coral);
   color: var(--tile-coral-ink);
 }
-
 .tile--teal .tile-panel {
   background: var(--tile-teal);
   color: var(--tile-teal-ink);
 }
-
 .tile--amber .tile-panel {
   background: var(--tile-amber);
   color: var(--tile-amber-ink);
 }
-
 .tile--indigo .tile-panel {
   background: var(--tile-indigo);
   color: var(--tile-indigo-ink);
 }
 
-.tile-glyph {
-  width: 56px;
-  height: 56px;
-  display: block;
-  color: inherit;
-  overflow: visible;
-}
-
-.tile-glyph [stroke] {
-  stroke: currentColor;
-  stroke-width: 3.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.tile-glyph [fill]:not([fill="none"]) {
-  fill: currentColor;
-}
-
-.tile-glyph .glyph-knockout {
-  stroke: var(--paper);
-  fill: none;
-  stroke-width: 3;
-}
+.tile-glyph { width: 48px; height: 48px; display: block; }
 
 .tile-body {
   display: flex;
@@ -259,12 +236,18 @@ body {
   min-height: 44px;
   padding: 10px 16px;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
-  color: #FFFFFF;
-  background: #111111;
-  border-radius: 999px;
+  color: var(--cta-label);
+  background: var(--cta);
+  border-radius: var(--radius-sm);
   text-align: center;
+}
+
+.tile--soon .tile-play {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1.5px solid var(--line);
 }
 
 .hub-footer {
@@ -276,51 +259,18 @@ body {
 }
 
 @media (min-width: 480px) {
-  .hub {
-    padding: 28px 20px 56px;
-  }
-
-  .hub-title {
-    font-size: 32px;
-  }
-
-  .hub-lede {
-    font-size: 17px;
-  }
-
-  .game-grid {
-    gap: 14px;
-  }
-
-  .tile {
-    min-height: 280px;
-  }
-
-  .tile-panel {
-    min-height: 124px;
-    height: 124px;
-  }
-
-  .tile-glyph {
-    width: 64px;
-    height: 64px;
-  }
-
-  .tile-body {
-    padding: 14px 14px 16px;
-  }
-
-  .tile-name {
-    font-size: 18px;
-  }
-
-  .tile-hook {
-    font-size: 14px;
-  }
+  .hub { padding: 28px 20px 56px; }
+  .hub-title { font-size: 32px; }
+  .hub-lede { font-size: 17px; }
+  .game-grid { gap: 14px; }
+  .tile { min-height: 240px; }
+  .tile-panel { height: 100px; }
+  .tile-glyph { width: 56px; height: 56px; }
+  .tile-body { padding: 14px 14px 16px; }
+  .tile-name { font-size: 18px; }
+  .tile-hook { font-size: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tile--playable {
-    transition: none;
-  }
+  .tile--playable { transition: none; }
 }

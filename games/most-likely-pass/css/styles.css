@@ -11,6 +11,11 @@
   --cta: #111111;
   --cta-label: #FFFFFF;
   --focus: #1C1917;
+  --accent: #818CF8;
+  --accent-ink: #312E81;
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
+  --prompt-chip: color-mix(in srgb, var(--accent) 16%, var(--paper));
+  --prompt-chip-ink: var(--accent-ink);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --radius: 14px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -27,6 +32,11 @@
     --cta: #FAFAFA;
     --cta-label: #0A0A0A;
     --focus: #FAFAFA;
+    --accent: #6366F1;
+    --accent-ink: #EEF2FF;
+    --accent-wash: color-mix(in srgb, var(--accent) 18%, transparent);
+    --prompt-chip: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    --prompt-chip-ink: var(--accent-ink);
   }
 }
 
@@ -378,16 +388,29 @@ input:focus-visible,
   color: var(--ink);
 }
 
+.prompt-chip {
+  background: var(--prompt-chip);
+  color: var(--prompt-chip-ink);
+  border: none;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
 .prompt-box {
+  color: var(--prompt-chip-ink);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
   margin: 0 0 16px;
   padding: 16px;
-  border: 1.5px solid var(--ink);
+  border: none;
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--prompt-chip);
 }
 
 .name-list {
@@ -414,9 +437,9 @@ input:focus-visible,
 }
 
 .name-row.selected {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
+  background: var(--accent-wash);
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 .name-row:disabled {
@@ -564,6 +587,16 @@ input:focus-visible,
   line-height: 1.25;
 }
 
+.stat-block.magnet .stat-value {
+  color: var(--accent);
+}
+
+.stat-block.mutuals .stat-value {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 4px;
+}
+
 .tally {
   margin: 16px 0 0;
   padding: 0;
@@ -658,4 +691,51 @@ input:focus-visible,
   .sheet-overlay {
     background: rgba(0, 0, 0, 0.6);
   }
+}
+
+
+/* Turn screen hosts curtain as state */
+#turn-curtain.curtain {
+  min-height: calc(100dvh - 48px);
+  margin: -16px -16px calc(-24px - var(--safe-bottom));
+  padding: 48px 24px calc(32px + var(--safe-bottom));
+}
+
+/* Editable name chip inputs */
+.chip--edit {
+  cursor: default;
+  padding: 4px 8px 4px 12px;
+}
+.chip--edit input {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  width: 7.5em;
+  max-width: 40vw;
+  min-width: 4em;
+  padding: 4px 0;
+  outline: none;
+}
+
+
+.stat-block--magnet {
+  border-left: 4px solid var(--accent);
+  padding-left: 12px;
+  margin-left: -4px;
+}
+
+/* Accent chrome (hub-tile match) */
+.topbar {
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.topbar-title {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 5px;
+  text-decoration-thickness: 2px;
 }

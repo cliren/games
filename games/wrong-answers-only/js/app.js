@@ -1,5 +1,6 @@
 import { randomQuestion } from "./questions.js";
 import { initHowto } from "./howto.js";
+import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const DRAFT_KEY = "wrong-answers-only:draft:v1";
 const MIN_NAMES = 3;
@@ -17,14 +18,13 @@ const ANSWER_MAX = 100;
  *  answers: Array<{ from: string, text: string }>,
  *  votes: Array<{ from: string, forIndex: number }>,
  *  pendingVote: number,
- *  phase: "home"|"names"|"question"|"pass"|"write"|"vote"|"podium",
- *  passMode: "write"|"vote",
+ *  phase: "home"|"names"|"write"|"vote"|"podium",
+ *  curtainOpen: boolean,
  *  shuffledOnce: boolean,
  * }} WaoGame */
 
 /** @type {WaoGame} */
 let state = emptyState();
-/** @type {ReturnType<typeof initHowto> | null} */
 let howto = null;
 
 const $ = (sel) => document.querySelector(sel);
@@ -42,7 +42,7 @@ function emptyState() {
     votes: [],
     pendingVote: -1,
     phase: "home",
-    passMode: "write",
+    curtainOpen: false,
     shuffledOnce: false,
   };
 }
@@ -50,9 +50,7 @@ function emptyState() {
 function saveDraft() {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 }
 
 function loadDraft() {
@@ -68,29 +66,27 @@ function loadDraft() {
 }
 
 function clearDraft() {
-  try {
-    localStorage.removeItem(DRAFT_KEY);
-  } catch {
-    /* ignore */
-  }
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 }
 
 function showScreen(id) {
   $$(".screen").forEach((el) => el.classList.remove("active"));
-  if (id === "pass" || id === "home" || id === "names" || id === "question") {
-    clearPrivateTurnDom();
-  }
+  if (id !== "write-turn" && id !== "vote-turn") clearPrivateDom();
   const screen = document.getElementById("screen-" + id);
   if (screen) screen.classList.add("active");
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
-function clearPrivateTurnDom() {
+function clearPrivateDom() {
   const input = $("#write-input");
   if (input) input.value = "";
   const list = $("#vote-list");
   if (list) list.innerHTML = "";
   state.pendingVote = -1;
+  ["write-curtain", "write-act", "vote-curtain", "vote-act"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
 }
 
 function currentName() {
@@ -106,10 +102,7 @@ function escapeHtml(s) {
 }
 
 function normAnswer(s) {
-  return String(s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function isTooRight(text) {
@@ -117,7 +110,6 @@ function isTooRight(text) {
   return normAnswer(text) === normAnswer(state.correct);
 }
 
-/* ---------- Home ---------- */
 function showHome() {
   state.phase = "home";
   showScreen("home");
@@ -137,11 +129,14 @@ function resumeDraft() {
   const draft = loadDraft();
   if (!draft) return;
   state = { ...emptyState(), ...draft, v: 1 };
-  // Privacy: never resume mid-write/vote with private UI — drop to pass for that turn
+  if (["question", "pass"].includes(state.phase)) {
+    state.phase = state.passMode === "vote" ? "vote" : "write";
+    state.curtainOpen = state.turnIndex > 0;
+  }
   if (state.phase === "write" || state.phase === "vote") {
-    state.phase = "pass";
+    // Privacy: land on curtain for that seat if not P1
+    state.curtainOpen = state.turnIndex > 0;
     state.pendingVote = -1;
-    saveDraft();
   }
   routeFromPhase();
 }
@@ -151,23 +146,11 @@ function routeFromPhase() {
     case "names":
       showNames(true);
       break;
-    case "question":
-      showQuestion();
-      break;
-    case "pass":
-      showPass();
-      break;
     case "write":
-      state.phase = "pass";
-      state.passMode = "write";
-      saveDraft();
-      showPass();
+      showWriteTurn();
       break;
     case "vote":
-      state.phase = "pass";
-      state.passMode = "vote";
-      saveDraft();
-      showPass();
+      showVoteTurn();
       break;
     case "podium":
       showPodium();
@@ -177,11 +160,11 @@ function routeFromPhase() {
   }
 }
 
-/* ---------- Names ---------- */
 function showNames(keepNames = false) {
   if (!keepNames) {
     state = emptyState();
     state.phase = "names";
+    state.names = generateFunNames(defaultPlayerCount());
   } else {
     state.phase = "names";
   }
@@ -235,9 +218,15 @@ function addName() {
   input.focus();
 }
 
-/* ---------- Question ---------- */
-function showQuestion() {
-  state.phase = "question";
+function shuffleNames() {
+  const count = Math.max(state.names.length, defaultPlayerCount());
+  state.names = generateFunNames(Math.min(count, MAX_NAMES));
+  saveDraft();
+  renderNameChips();
+  updateStartEnabled();
+}
+
+function ensureQuestion() {
   if (!state.question) {
     const p = randomQuestion();
     state.promptId = p.id;
@@ -245,13 +234,21 @@ function showQuestion() {
     state.correct = p.correct;
     state.shuffledOnce = false;
   }
-  saveDraft();
-  showScreen("question");
-  $("#question-text").textContent = state.question;
-  $("#btn-shuffle").hidden = state.shuffledOnce;
 }
 
-function shuffleQuestion() {
+function startRound() {
+  ensureQuestion();
+  state.turnIndex = 0;
+  state.answers = [];
+  state.votes = [];
+  state.pendingVote = -1;
+  state.phase = "write";
+  state.curtainOpen = false; // P1 skips
+  saveDraft();
+  showWriteTurn();
+}
+
+function shuffleQuestionOnce() {
   if (state.shuffledOnce) return;
   const p = randomQuestion();
   state.promptId = p.id;
@@ -259,51 +256,51 @@ function shuffleQuestion() {
   state.correct = p.correct;
   state.shuffledOnce = true;
   saveDraft();
-  $("#question-text").textContent = state.question;
-  $("#btn-shuffle").hidden = true;
+  $("#write-question").textContent = state.question;
+  $("#btn-q-shuffle").hidden = true;
 }
 
-function startRoundFromQuestion() {
-  state.turnIndex = 0;
-  state.answers = [];
-  state.votes = [];
-  state.pendingVote = -1;
-  state.passMode = "write";
-  state.phase = "pass";
+/* ---------- Write (curtain before typing; P1 skip) ---------- */
+function showWriteTurn() {
+  state.phase = "write";
+  ensureQuestion();
   saveDraft();
-  showPass();
-}
-
-/* ---------- Pass curtain ---------- */
-function showPass() {
-  state.phase = "pass";
-  state.pendingVote = -1;
-  saveDraft();
-  clearPrivateTurnDom();
-  showScreen("pass");
-  const name = currentName();
-  $("#pass-title").innerHTML = `Pass to <strong>${escapeHtml(name)}</strong>`;
-  $("#pass-sub").textContent = "Don't peek.";
-  $("#btn-im").textContent = `I'm ${name}`;
-}
-
-function openAfterPass() {
-  if (state.passMode === "vote") {
-    showVote();
+  showScreen("write-turn");
+  if (state.turnIndex === 0 || !state.curtainOpen) {
+    if (state.turnIndex === 0) state.curtainOpen = false;
+    if (state.curtainOpen) {
+      showWriteCurtain();
+    } else {
+      revealWrite();
+    }
   } else {
-    showWrite();
+    showWriteCurtain();
   }
 }
 
-/* ---------- Write ---------- */
-function showWrite() {
-  state.phase = "write";
-  state.passMode = "write";
+function showWriteCurtain() {
+  state.curtainOpen = true;
   saveDraft();
-  showScreen("write");
+  const name = currentName();
+  $("#write-curtain").hidden = false;
+  $("#write-act").hidden = true;
+  $("#write-pass-title").innerHTML = `Pass to <strong>${escapeHtml(name)}</strong>`;
+  $("#write-pass-sub").textContent = "Don't peek.";
+  $("#btn-write-im").textContent = `I'm ${name}`;
+  const input = $("#write-input");
+  if (input) input.value = "";
+}
+
+function revealWrite() {
+  state.curtainOpen = false;
+  saveDraft();
+  $("#write-curtain").hidden = true;
+  $("#write-act").hidden = false;
   $("#write-question").textContent = state.question;
   $("#write-who").textContent = currentName();
   $("#write-progress").textContent = `${state.turnIndex + 1} / ${state.names.length}`;
+  const canShuffle = state.turnIndex === 0 && !state.shuffledOnce && state.answers.length === 0;
+  $("#btn-q-shuffle").hidden = !canShuffle;
   const input = $("#write-input");
   input.value = "";
   input.focus();
@@ -321,38 +318,63 @@ function commitWrite() {
   const text = ($("#write-input").value || "").trim().slice(0, ANSWER_MAX);
   if (!text) return;
   state.answers.push({ from: currentName(), text });
-  clearPrivateTurnDom();
   if (state.turnIndex + 1 >= state.names.length) {
-    // All wrote — start vote phase with curtain
     state.turnIndex = 0;
     state.votes = [];
-    state.passMode = "vote";
-    state.phase = "pass";
+    state.phase = "vote";
+    state.curtainOpen = false; // first voter skips
     saveDraft();
-    showPass();
+    showVoteTurn();
   } else {
     state.turnIndex += 1;
-    state.passMode = "write";
-    state.phase = "pass";
+    state.curtainOpen = true;
+    state.phase = "write";
     saveDraft();
-    showPass();
+    showWriteCurtain();
   }
 }
 
-/* ---------- Vote (always curtain) ---------- */
-function showVote() {
+/* ---------- Vote (curtain as state; tap-commit; P1 skip) ---------- */
+function showVoteTurn() {
   state.phase = "vote";
-  state.passMode = "vote";
+  saveDraft();
+  showScreen("vote-turn");
+  if (state.turnIndex === 0) {
+    state.curtainOpen = false;
+    revealVote();
+  } else if (state.curtainOpen) {
+    showVoteCurtain();
+  } else {
+    revealVote();
+  }
+}
+
+function showVoteCurtain() {
+  state.curtainOpen = true;
   state.pendingVote = -1;
   saveDraft();
-  showScreen("vote");
+  const list = $("#vote-list");
+  if (list) list.innerHTML = "";
+  const name = currentName();
+  $("#vote-curtain").hidden = false;
+  $("#vote-act").hidden = true;
+  $("#vote-pass-title").innerHTML = `Pass to <strong>${escapeHtml(name)}</strong>`;
+  $("#vote-pass-sub").textContent = "Don't peek.";
+  $("#btn-vote-im").textContent = `I'm ${name}`;
+}
+
+function revealVote() {
+  state.curtainOpen = false;
+  state.pendingVote = -1;
+  saveDraft();
+  $("#vote-curtain").hidden = true;
+  $("#vote-act").hidden = false;
   $("#vote-question").textContent = state.question;
   $("#vote-who").textContent = currentName();
   $("#vote-progress").textContent = `${state.turnIndex + 1} / ${state.names.length}`;
   const list = $("#vote-list");
   list.innerHTML = "";
   const me = currentName();
-  // Shuffle display order but keep original indices for voting
   const order = state.answers.map((_, i) => i);
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -360,22 +382,23 @@ function showVote() {
   }
   order.forEach((idx) => {
     const ans = state.answers[idx];
-    if (ans.from === me) return; // cannot self-vote
+    if (ans.from === me) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "pick-row";
     btn.dataset.index = String(idx);
-    // Hide author until after vote (podium)
     btn.textContent = ans.text;
     btn.addEventListener("click", () => {
       state.pendingVote = idx;
       $$("#vote-list .pick-row").forEach((el) =>
         el.classList.toggle("selected", el.dataset.index === String(idx))
       );
-      $("#btn-vote-done").disabled = false;
+      // Tap-commit
+      commitVote();
     });
     list.appendChild(btn);
   });
+  $("#btn-vote-done").hidden = true;
   $("#btn-vote-done").disabled = true;
 }
 
@@ -383,21 +406,21 @@ function commitVote() {
   if (state.pendingVote < 0) return;
   state.votes.push({ from: currentName(), forIndex: state.pendingVote });
   state.pendingVote = -1;
-  clearPrivateTurnDom();
+  const list = $("#vote-list");
+  if (list) list.innerHTML = "";
   if (state.turnIndex + 1 >= state.names.length) {
     state.phase = "podium";
     saveDraft();
     showPodium();
   } else {
     state.turnIndex += 1;
-    state.passMode = "vote";
-    state.phase = "pass";
+    state.curtainOpen = true;
+    state.phase = "vote";
     saveDraft();
-    showPass();
+    showVoteCurtain();
   }
 }
 
-/* ---------- Podium ---------- */
 function showPodium() {
   state.phase = "podium";
   clearDraft();
@@ -407,12 +430,11 @@ function showPodium() {
   const tallies = state.answers.map((ans, i) => {
     const tooRight = isTooRight(ans.text);
     let votes = state.votes.filter((v) => v.forIndex === i).length;
-    if (tooRight) votes = 0; // forced 0 — cannot place 1st
+    if (tooRight) votes = 0;
     return { index: i, from: ans.from, text: ans.text, votes, tooRight };
   });
 
   tallies.sort((a, b) => {
-    // Too-right sinks below anyone with real votes; among zeros keep relative
     if (a.tooRight !== b.tooRight) return a.tooRight ? 1 : -1;
     return b.votes - a.votes || a.from.localeCompare(b.from);
   });
@@ -429,10 +451,12 @@ function showPodium() {
     }
     const isFirst = !row.tooRight && row.votes === topVotes && topVotes > 0 && rank === 1;
     const li = document.createElement("li");
-    li.className = "board-row" + (isFirst ? " board-main" : "");
+    li.className = "board-row" + (isFirst ? " board-main" : "") + (row.tooRight ? " too-right" : "");
     let tag = "";
     if (row.tooRight) {
-      tag = '<span class="board-tag">Too right</span>';
+      tag = '<span class="board-tag too-right-tag">Too right</span>';
+    } else if (isFirst) {
+      tag = '<span class="board-tag winner">Winner</span>';
     } else if (row.votes === 0) {
       tag = '<span class="board-tag soft">Nobody bought it</span>';
     }
@@ -451,14 +475,12 @@ function anotherRound() {
   const names = [...state.names];
   state = emptyState();
   state.names = names;
-  state.phase = "question";
   const p = randomQuestion();
   state.promptId = p.id;
   state.question = p.q;
   state.correct = p.correct;
   state.shuffledOnce = false;
-  saveDraft();
-  showQuestion();
+  startRound();
 }
 
 function newGame() {
@@ -467,7 +489,6 @@ function newGame() {
   showNames(false);
 }
 
-/* ---------- Wire ---------- */
 function init() {
   howto = initHowto({
     overlay: $("#howto-overlay"),
@@ -482,10 +503,7 @@ function init() {
 
   $("#btn-add-name").addEventListener("click", addName);
   $("#name-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addName();
-    }
+    if (e.key === "Enter") { e.preventDefault(); addName(); }
   });
   $("#btn-names-start").addEventListener("click", () => {
     if (state.names.length < MIN_NAMES) return;
@@ -493,21 +511,26 @@ function init() {
     state.question = "";
     state.correct = undefined;
     state.shuffledOnce = false;
-    showQuestion();
+    startRound();
   });
+  $("#btn-names-shuffle").addEventListener("click", shuffleNames);
   $("#btn-names-back").addEventListener("click", () => {
     clearDraft();
     showHome();
   });
 
-  $("#btn-shuffle").addEventListener("click", shuffleQuestion);
-  $("#btn-question-go").addEventListener("click", startRoundFromQuestion);
-
-  $("#btn-im").addEventListener("click", openAfterPass);
-
+  $("#btn-write-im").addEventListener("click", revealWrite);
+  $("#btn-q-shuffle").addEventListener("click", shuffleQuestionOnce);
   $("#btn-write-done").addEventListener("click", commitWrite);
   $("#write-input").addEventListener("input", updateWriteDone);
+  $("#write-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!$("#btn-write-done").disabled) commitWrite();
+    }
+  });
 
+  $("#btn-vote-im").addEventListener("click", revealVote);
   $("#btn-vote-done").addEventListener("click", commitVote);
 
   $("#btn-another").addEventListener("click", anotherRound);

@@ -151,3 +151,16 @@ On the App Store, “1234” is a **genre label**, not one app:
 ---
 
 *Scouted for Suren / hub pipeline. Update this file when a title ships or a pitch dies.*
+
+---
+
+## Update — interactive wave (2026-09-14)
+
+Suren asked for **more intuitive / 1234-like / not just text** games that are **fully browser-based**.
+
+Authoritative batch plan: [`batch-build-plan.md`](./batch-build-plan.md)
+
+**Build now:** Green Flash · Corner Claim · Pass Bomb · Zone Whack · Steady Hands  
+**(Text social parked):** Wrong Answers Only · Most Likely Pass · Soft Launch · Sequel Pitch · One Clue Only · Spy Word · Caption Crimes  
+**Still good:** Blame Chain brief unchanged.
+
