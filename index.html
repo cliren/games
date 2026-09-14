@@ -12,20 +12,84 @@
 <body>
   <main class="hub">
     <header class="hub-header">
-      <p class="hub-wordmark">Games</p>
-      <p class="hub-lede">Pass-the-phone games. No login.</p>
+      <h1 class="hub-title">Games</h1>
+      <p class="hub-lede">Pass-the-phone party games. Pick one and go.</p>
     </header>
 
-    <ul class="game-list" role="list">
+    <ul class="game-grid" role="list">
       <li>
-        <a class="game-card" href="./games/picture-telephone/">
-          <div class="game-card-body">
-            <h2 class="game-card-title">Picture Telephone</h2>
-            <p class="game-card-hook">Draw what they wrote. Write what they drew. Ruin it together.</p>
-            <p class="game-card-meta">2–8 · ~15 min</p>
+        <a class="tile tile--playable tile--coral" href="./games/picture-telephone/">
+          <div class="tile-panel" aria-hidden="true">
+            <svg class="tile-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="8" y="10" width="36" height="44" rx="6" stroke="currentColor" stroke-width="3"/>
+              <path d="M18 28c4-6 10-6 14 0M22 40h10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              <path d="M40 38l10 4-4 10-6-8z" fill="currentColor"/>
+              <circle cx="48" cy="20" r="6" stroke="currentColor" stroke-width="3"/>
+            </svg>
           </div>
-          <span class="game-card-chevron" aria-hidden="true">›</span>
+          <div class="tile-body">
+            <h2 class="tile-name">Picture Telephone</h2>
+            <p class="tile-hook">Draw → write → draw. Ruin it together.</p>
+            <p class="tile-meta">2–8 · ~15 min</p>
+            <span class="tile-play">Play</span>
+          </div>
         </a>
+      </li>
+
+      <li>
+        <div class="tile tile--soon tile--teal" aria-disabled="true">
+          <div class="tile-panel" aria-hidden="true">
+            <svg class="tile-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="22" stroke="currentColor" stroke-width="3"/>
+              <path d="M32 18v16l10 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M20 48l8-4M44 48l-8-4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="tile-body">
+            <span class="tile-badge">Soon</span>
+            <h2 class="tile-name">Blame Chain</h2>
+            <p class="tile-hook">Who did it? Accuse, alibi, roast the board.</p>
+            <p class="tile-meta">3–8 · ~10 min</p>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="tile tile--soon tile--amber" aria-disabled="true">
+          <div class="tile-panel" aria-hidden="true">
+            <svg class="tile-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 44V20h40v24H12z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+              <path d="M20 28h24M20 36h16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              <circle cx="48" cy="48" r="10" fill="currentColor"/>
+              <path d="M44 48h8M48 44v8" stroke="#FAF8F5" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="tile-body">
+            <span class="tile-badge">Soon</span>
+            <h2 class="tile-name">Wrong Answers Only</h2>
+            <p class="tile-hook">Trivia where the correct answer loses.</p>
+            <p class="tile-meta">3–8 · ~15 min</p>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="tile tile--soon tile--indigo" aria-disabled="true">
+          <div class="tile-panel" aria-hidden="true">
+            <svg class="tile-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="18" y="8" width="28" height="48" rx="6" stroke="currentColor" stroke-width="3"/>
+              <circle cx="32" cy="48" r="2.5" fill="currentColor"/>
+              <path d="M26 22h12M26 30h8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              <path d="M40 36l12 4-8 10z" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="tile-body">
+            <span class="tile-badge">Soon</span>
+            <h2 class="tile-name">Most Likely Pass</h2>
+            <p class="tile-hook">Pass to who fits — then see the real picks.</p>
+            <p class="tile-meta">3–10 · ~10 min</p>
+          </div>
+        </div>
       </li>
     </ul>
 
