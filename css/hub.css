@@ -1,4 +1,4 @@
-/* Hub — punch panels + 4px rails matching game accents (v4) */
+/* Hub — punch panels + 4px rails matching game accents (v9) */
 :root {
   --paper: #FAF8F5;
   --surface: #FFFFFF;
@@ -27,12 +27,15 @@
   --tile-green-ink: #14532D;
   --tile-sky: #38BDF8;
   --tile-sky-ink: #0C4A6E;
+  --tile-rose: #FB7185;
+  --tile-rose-ink: #9F1239;
 
   --accent-pt: var(--tile-coral);
   --accent-blame: var(--tile-teal);
   --accent-wao: var(--tile-amber);
   --accent-mlp: var(--tile-indigo);
   --accent-steady: var(--tile-sky);
+  --accent-arrow: var(--tile-rose);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -59,6 +62,8 @@
     --tile-green-ink: #DCFCE7;
     --tile-sky: #38BDF8;
     --tile-sky-ink: #082F49;
+    --tile-rose: #FB7185;
+    --tile-rose-ink: #FFE4E6;
   }
 }
 
@@ -161,6 +166,7 @@ body {
 .tile--indigo { border-left: 4px solid var(--tile-indigo); }
 .tile--green { border-left: 4px solid var(--tile-green); }
 .tile--sky { border-left: 4px solid var(--tile-sky); }
+.tile--rose { border-left: 4px solid var(--tile-rose); }
 
 .tile-panel {
   display: flex;
@@ -194,6 +200,10 @@ body {
 .tile--sky .tile-panel {
   background: var(--tile-sky);
   color: var(--tile-sky-ink);
+}
+.tile--rose .tile-panel {
+  background: var(--tile-rose);
+  color: var(--tile-rose-ink);
 }
 
 .tile-glyph { width: 48px; height: 48px; display: block; }

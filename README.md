@@ -8,6 +8,7 @@ Static multi-game hub for same-phone party games. One phone. Pass in the app. No
 
 | Game | Path | Players |
 |------|------|---------|
+| **Arrow Shot** | [`games/arrow-shot/`](./games/arrow-shot/) | 1 · ~3 min |
 | **Picture Telephone** | [`games/picture-telephone/`](./games/picture-telephone/) | 1–8 · ~15 min |
 | **Most Likely Pass** | [`games/most-likely-pass/`](./games/most-likely-pass/) | 2–8 · ~10 min |
 | **Blame Chain** | [`games/blame-chain/`](./games/blame-chain/) | 2–8 · ~8 min |
@@ -33,6 +34,8 @@ Static multi-game hub for same-phone party games. One phone. Pass in the app. No
 **Zone Whack:** Split the screen. Moles spawn in colored zones — whack only yours. Highest score wins.
 
 **Steady Hands:** Rest the phone on your palm. Hold still 5s. Lowest DeviceMotion shake wins. Motion permission on Start; hold-still tap timer if denied.
+
+**Arrow Shot:** Pull back to aim, release to shoot. Matter.js physics — hit targets in 5 arrows.
 
 ### How to play Picture Telephone
 
