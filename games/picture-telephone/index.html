@@ -30,7 +30,7 @@
       </div>
     </section>
 
-    <!-- JOIN LINK (merged into flow from home secondary) -->
+    <!-- JOIN LINK -->
     <section id="screen-join-link" class="screen">
       <header class="brand">
         <h2 class="title">Join</h2>
@@ -61,6 +61,7 @@
 
         <span class="label">How many players?</span>
         <div class="count-picker" role="group" aria-label="Player count">
+          <button type="button" data-n="1">1</button>
           <button type="button" data-n="2">2</button>
           <button type="button" data-n="3" class="active">3</button>
           <button type="button" data-n="4">4</button>
@@ -70,6 +71,15 @@
           <button type="button" data-n="8">8</button>
         </div>
         <p class="hint" id="count-hint">3 players · 3 turns</p>
+
+        <div id="solo-turns-wrap" hidden>
+          <span class="label">How many turns?</span>
+          <div class="count-picker turns-picker" role="group" aria-label="Solo turn count">
+            <button type="button" data-turns="3">3</button>
+            <button type="button" data-turns="4" class="active">4</button>
+            <button type="button" data-turns="5">5</button>
+          </div>
+        </div>
 
         <span class="label">Prompt</span>
         <div class="prompt-box" id="prompt-preview">A cat wearing sunglasses</div>
@@ -123,8 +133,8 @@
         <button type="button" class="btn btn-sm" id="btn-undo">Undo</button>
         <button type="button" class="btn btn-sm" id="btn-clear">Clear</button>
       </div>
-      <div class="sticky-cta">
-        <button type="button" class="btn btn-primary btn-block" id="btn-draw-submit">Done drawing</button>
+      <div class="sticky-cta sticky-cta--strong">
+        <button type="button" class="btn btn-primary btn-block btn-done" id="btn-draw-submit">Done drawing</button>
       </div>
     </section>
 
@@ -140,41 +150,46 @@
       </div>
       <label class="label" for="describe-input">Your description</label>
       <textarea id="describe-input" maxlength="160" placeholder="What is this?"></textarea>
-      <div class="sticky-cta">
-        <button type="button" class="btn btn-primary btn-block" id="btn-describe-submit">Done</button>
+      <div class="sticky-cta sticky-cta--strong">
+        <button type="button" class="btn btn-primary btn-block btn-done" id="btn-describe-submit">Done</button>
       </div>
     </section>
 
-    <!-- PASS -->
-    <section id="screen-pass" class="screen screen-sticky">
-      <header class="brand">
-        <h2 class="title" id="pass-title">Hand this to the next player</h2>
-        <p class="lede caption" id="pass-subtitle">Turn 2 of 5</p>
-      </header>
-      <div class="card">
+    <!-- PRIVACY CURTAIN (hotseat handoff — primary path) -->
+    <section id="screen-curtain" class="screen">
+      <div class="curtain card">
+        <p class="caption" id="curtain-progress">Turn 2 of 5</p>
+        <h2 class="title" id="curtain-title">Pass the phone</h2>
+        <p class="lede" id="curtain-hint">Hand it over so the next person doesn’t peek.</p>
+        <div id="curtain-name-wrap">
+          <label class="label" for="curtain-name">Who’s up?</label>
+          <input type="text" id="curtain-name" maxlength="24" autocomplete="nickname" placeholder="Your name" />
+        </div>
+        <div class="stack" style="margin-top:20px">
+          <button type="button" class="btn btn-primary btn-block btn-done" id="btn-curtain-ready">Next</button>
+        </div>
+        <p class="hint" id="pass-soft-hint" hidden>Drawing is large — stay on this phone.</p>
         <div class="alert" id="pass-toolong" hidden>
-          Link too long. Download the turn file and send that instead.
+          Drawing is too large to share as a link. Stay on this phone, or use the fallback below.
         </div>
-        <div id="pass-link-block">
-          <label class="label" for="share-url">Share link</label>
-          <input type="text" id="share-url" readonly />
-        </div>
-        <div class="pass-actions">
-          <button type="button" class="btn btn-primary btn-block" id="btn-copy-link">Copy link</button>
-          <button type="button" class="btn btn-ghost btn-block" id="btn-hotseat">Same phone? Continue here</button>
-          <div id="hotseat-name-wrap" hidden>
-            <label class="label" for="hotseat-name">Next player’s name</label>
-            <input type="text" id="hotseat-name" maxlength="24" placeholder="e.g. Jordan" />
+        <details class="trouble-disclosure" id="trouble-disclosure">
+          <summary>Another phone? (rare)</summary>
+          <div class="trouble-body">
+            <button type="button" class="btn btn-ghost btn-block" id="btn-copy-link">Copy link</button>
+            <div id="pass-link-block" hidden>
+              <label class="label" for="share-url">Share link</label>
+              <input type="text" id="share-url" readonly />
+            </div>
+            <div id="pass-file-block">
+              <button type="button" class="btn btn-ghost btn-block" id="btn-download-turn">Download turn file</button>
+            </div>
+            <details class="qr-disclosure" id="qr-disclosure">
+              <summary>Show QR</summary>
+              <div class="qr-box" id="qr-container" aria-label="QR code"></div>
+            </details>
           </div>
-          <div id="pass-file-block">
-            <button type="button" class="btn btn-ghost btn-block" id="btn-download-turn">Download turn file</button>
-          </div>
-          <details class="qr-disclosure" id="qr-disclosure">
-            <summary>Show QR</summary>
-            <div class="qr-box" id="qr-container" aria-label="QR code"></div>
-          </details>
-          <button type="button" class="btn btn-ghost btn-block" id="btn-pass-home">Home</button>
-        </div>
+        </details>
+        <button type="button" class="btn btn-ghost btn-block" id="btn-pass-home" style="margin-top:8px">Home</button>
       </div>
     </section>
 
@@ -209,7 +224,7 @@
       </div>
       <ol class="howto-steps">
         <li>Someone draws a prompt.</li>
-        <li>Pass the link — next describes or draws.</li>
+        <li>Pass the phone — or keep going solo.</li>
         <li>Reveal the chain together.</li>
       </ol>
       <button type="button" class="btn btn-primary btn-block" id="btn-howto-gotit">Got it</button>

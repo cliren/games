@@ -2,10 +2,77 @@
  * Touch-friendly drawing canvas with stroke vectors, undo, clear, pen sizes.
  * Coordinates stored in normalized 0–1000 space. Canvas surface always #FFFFFF.
  * DPR capped at 2. Ink paints at 0ms (immediate).
+ * Live + end-of-stroke simplification keeps Copy-link hashes smaller.
  */
 
 const CANVAS_BG = "#FFFFFF";
 const INK = "#1C1917";
+/** Min squared distance (0–1000 space) between live sample points */
+const LIVE_MIN_DIST2 = 12;
+/** Ramer–Douglas–Peucker epsilon on stroke end (0–1000 space) */
+const RDP_EPSILON = 10;
+
+/**
+ * Simplify flat [x,y,x,y,…] polyline with Ramer–Douglas–Peucker.
+ * @param {number[]} points
+ * @param {number} epsilon
+ */
+export function simplifyFlatPoints(points, epsilon = RDP_EPSILON) {
+  const n = points.length / 2;
+  if (n <= 2) return points.slice();
+
+  const keep = new Uint8Array(n);
+  keep[0] = 1;
+  keep[n - 1] = 1;
+
+  /** @type {[number, number][]} */
+  const stack = [[0, n - 1]];
+  while (stack.length) {
+    const [start, end] = stack.pop();
+    const ax = points[start * 2];
+    const ay = points[start * 2 + 1];
+    const bx = points[end * 2];
+    const by = points[end * 2 + 1];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    let maxDist = 0;
+    let maxIdx = -1;
+    for (let i = start + 1; i < end; i++) {
+      const px = points[i * 2];
+      const py = points[i * 2 + 1];
+      let dist;
+      if (len2 === 0) {
+        const ex = px - ax;
+        const ey = py - ay;
+        dist = Math.sqrt(ex * ex + ey * ey);
+      } else {
+        const t = ((px - ax) * dx + (py - ay) * dy) / len2;
+        const qx = ax + t * dx;
+        const qy = ay + t * dy;
+        const ex = px - qx;
+        const ey = py - qy;
+        dist = Math.sqrt(ex * ex + ey * ey);
+      }
+      if (dist > maxDist) {
+        maxDist = dist;
+        maxIdx = i;
+      }
+    }
+    if (maxDist > epsilon && maxIdx >= 0) {
+      keep[maxIdx] = 1;
+      stack.push([start, maxIdx], [maxIdx, end]);
+    }
+  }
+
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    if (keep[i]) {
+      out.push(points[i * 2], points[i * 2 + 1]);
+    }
+  }
+  return out;
+}
 
 export class DrawCanvas {
   /**
@@ -133,8 +200,8 @@ export class DrawCanvas {
     const pts = this._current.points;
     const lx = pts[pts.length - 2];
     const ly = pts[pts.length - 1];
-    // Soft simplify: skip near-duplicate points
-    if ((x - lx) * (x - lx) + (y - ly) * (y - ly) < 2.5) return;
+    // Aggressive live simplify: skip near-duplicate points
+    if ((x - lx) * (x - lx) + (y - ly) * (y - ly) < LIVE_MIN_DIST2) return;
     pts.push(x, y);
     this._drawStrokeSegment(this._current, pts.length - 4);
   }
@@ -145,8 +212,10 @@ export class DrawCanvas {
       const x = this._current.points[0];
       const y = this._current.points[1];
       this._current.points.push(x + 0.5, y + 0.5);
-      this.redraw();
+    } else if (this._current.points.length > 6) {
+      this._current.points = simplifyFlatPoints(this._current.points, RDP_EPSILON);
     }
+    this.redraw();
     this._current = null;
     this._emit();
   }

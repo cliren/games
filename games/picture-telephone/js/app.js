@@ -6,6 +6,8 @@ import {
   createEmptyState,
   nextPhase,
   turnsRemaining,
+  turnTarget,
+  isSolo,
   lastEntry,
   quantizeStrokes,
   dequantizeStrokes,
@@ -31,6 +33,8 @@ let showAllReveal = false;
 /** @type {ReturnType<typeof initHowto> | null} */
 let howto = null;
 let qrRendered = false;
+/** Solo turn picker value when playerCount === 1 */
+let soloTurns = 4;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -75,8 +79,15 @@ function destroyCanvases() {
   }
 }
 
+function lastAuthorName() {
+  const last = lastEntry(state);
+  if (last && last.a) return last.a;
+  return state.promptAuthor || pendingName || "";
+}
+
 function applyStateAndRoute(s) {
   state = s;
+  if (state.turns == null) state.turns = state.playerCount;
   const phase = nextPhase(state);
   if (phase === "reveal") {
     clearDraft();
@@ -100,6 +111,7 @@ function showHome() {
 /* ---------- Setup ---------- */
 function showSetup() {
   state = createEmptyState();
+  soloTurns = 4;
   showScreen("setup");
   $("#player-name").value = "";
   $("#custom-prompt").value = "";
@@ -107,26 +119,48 @@ function showSetup() {
   selectCount(3);
 }
 
+function selectSoloTurns(n) {
+  soloTurns = n;
+  $$(".turns-picker button").forEach((b) => {
+    b.classList.toggle("active", Number(b.dataset.turns) === n);
+  });
+  if (state.playerCount === 1) {
+    state.turns = n;
+    $("#count-hint").textContent = "Solo · " + n + " turns";
+  }
+}
+
 function selectCount(n) {
   state.playerCount = n;
-  $$(".count-picker button").forEach((b) => {
+  $$(".count-picker:not(.turns-picker) button").forEach((b) => {
     b.classList.toggle("active", Number(b.dataset.n) === n);
   });
-  $("#count-hint").textContent = n + " players · " + n + " turns";
+  const soloWrap = $("#solo-turns-wrap");
+  if (n === 1) {
+    soloWrap.hidden = false;
+    state.turns = soloTurns;
+    selectSoloTurns(soloTurns);
+    $("#count-hint").textContent = "Solo · " + soloTurns + " turns";
+  } else {
+    soloWrap.hidden = true;
+    state.turns = n;
+    $("#count-hint").textContent = n + " players · " + n + " turns";
+  }
 }
 
 /* ---------- Draw ---------- */
 function showDraw(promptText, authorHint) {
   destroyCanvases();
   showScreen("draw");
-  setProgress(state.chain.length, state.playerCount);
+  const total = turnTarget(state);
+  setProgress(state.chain.length, total);
   $("#draw-prompt").textContent = promptText;
   $("#draw-who").textContent = authorHint
     ? "Drawing as " + authorHint
     : "Your turn to draw";
   const label = $("#draw-progress-label");
   if (label) {
-    label.textContent = `Turn ${state.chain.length + 1} of ${state.playerCount}`;
+    label.textContent = `Turn ${state.chain.length + 1} of ${total}`;
   }
   const canvas = $("#draw-canvas");
   drawCanvas = new DrawCanvas(canvas);
@@ -176,14 +210,15 @@ function submitDrawing() {
 function showDescribe() {
   destroyCanvases();
   showScreen("describe");
-  setProgress(state.chain.length, state.playerCount);
+  const total = turnTarget(state);
+  setProgress(state.chain.length, total);
   const last = lastEntry(state);
   $("#describe-who").textContent = pendingName
     ? "Describing as " + pendingName
     : "What is this?";
   const label = $("#describe-progress-label");
   if (label) {
-    label.textContent = `Turn ${state.chain.length + 1} of ${state.playerCount}`;
+    label.textContent = `Turn ${state.chain.length + 1} of ${total}`;
   }
   const canvas = $("#describe-canvas");
   previewCanvas = paintStrokesOnCanvas(
@@ -201,14 +236,14 @@ function submitDescription() {
     toast("Write a description");
     return;
   }
-  const name = pendingName || "Guesser";
+  const name = pendingName || lastAuthorName() || "Guesser";
   state.chain.push({ t: "g", a: name, x: text });
   if (!state.players.includes(name)) state.players.push(name);
   clearDraft();
   goToPass();
 }
 
-/* ---------- Pass / share ---------- */
+/* ---------- Hotseat handoff (privacy curtain) ---------- */
 function goToPass() {
   const phase = nextPhase(state);
   if (phase === "reveal") {
@@ -217,20 +252,33 @@ function goToPass() {
     startReveal();
     return;
   }
-  showPassScreen();
+  // Always stay in-app: Done → privacy curtain → I’m {name} / Next
+  showCurtain();
 }
 
-function showPassScreen() {
+function updateCurtainCta() {
+  const btn = $("#btn-curtain-ready");
+  if (!btn) return;
+  if (isSolo(state)) {
+    btn.textContent = "Next";
+    return;
+  }
+  const name = $("#curtain-name")?.value?.trim();
+  btn.textContent = name ? "I’m " + name : "Next";
+}
+
+function showCurtain() {
   destroyCanvases();
-  showScreen("pass");
+  showScreen("curtain");
   qrRendered = false;
+
   const remaining = turnsRemaining(state);
   const phase = nextPhase(state);
   const turnNum = state.chain.length + 1;
-  const total = state.playerCount;
+  const total = turnTarget(state);
+  const solo = isSolo(state);
 
-  $("#pass-title").textContent = "Hand this to the next player";
-  $("#pass-subtitle").textContent =
+  $("#curtain-progress").textContent =
     remaining === 0
       ? "Ready to reveal"
       : `Turn ${turnNum} of ${total} · next: ${phase === "draw" ? "draw" : "describe"}`;
@@ -238,38 +286,58 @@ function showPassScreen() {
   const { hash, softLong, tooLong, url } = writeHash(state);
   const shareUrl = tooLong ? null : url || fullShareUrl(hash);
 
+  const softHint = $("#pass-soft-hint");
   const warn = $("#pass-toolong");
-  const linkBlock = $("#pass-link-block");
-  const fileBlock = $("#pass-file-block");
-  const copyBtn = $("#btn-copy-link");
+  const trouble = $("#trouble-disclosure");
   const disclosure = $("#qr-disclosure");
+  const copyBtn = $("#btn-copy-link");
+  const linkBlock = $("#pass-link-block");
+  const nameWrap = $("#curtain-name-wrap");
 
+  if (solo) {
+    $("#curtain-title").textContent = "Look away, then Next";
+    $("#curtain-hint").textContent = "Same phone · flip roles without peeking.";
+    nameWrap.hidden = true;
+    $("#curtain-name").value = state.promptAuthor || lastAuthorName() || "";
+  } else {
+    $("#curtain-title").textContent = "Pass the phone";
+    $("#curtain-hint").textContent = "Hand it over. Next person taps below — no texts needed.";
+    nameWrap.hidden = false;
+    $("#curtain-name").value = "";
+    $("#curtain-name").placeholder = "Your name";
+  }
+
+  // Fallback tools buried — never primary. Hotseat never requires download.
+  trouble.open = false;
   if (tooLong) {
+    softHint.hidden = true;
     warn.hidden = false;
-    warn.textContent =
-      "Link too long. Download the turn file and send that instead.";
-    linkBlock.hidden = true;
     copyBtn.hidden = true;
-    fileBlock.hidden = false;
+    linkBlock.hidden = true;
+    trouble.hidden = false;
+    // Only auto-open fallback when link is unusable for another phone
+    trouble.open = true;
     disclosure.hidden = true;
     $("#qr-container").innerHTML = "";
+    $("#share-url").value = "";
   } else {
-    warn.hidden = !softLong;
-    if (softLong) {
-      warn.textContent =
-        "Link is getting long. Copy link still works — turn file is safer.";
-    }
-    linkBlock.hidden = false;
+    warn.hidden = true;
+    softHint.hidden = !softLong;
     copyBtn.hidden = false;
-    fileBlock.hidden = false;
+    linkBlock.hidden = true;
+    trouble.hidden = false;
     disclosure.hidden = false;
     disclosure.open = false;
-    $("#share-url").value = shareUrl;
+    $("#share-url").value = shareUrl || "";
     $("#qr-container").innerHTML = "";
   }
 
-  $("#btn-hotseat").textContent = "Same phone? Continue here";
-  $("#hotseat-name-wrap").hidden = true;
+  updateCurtainCta();
+  if (solo) {
+    $("#btn-curtain-ready").focus();
+  } else {
+    $("#curtain-name").focus();
+  }
 }
 
 function ensureQR() {
@@ -277,7 +345,7 @@ function ensureQR() {
   const shareUrl = $("#share-url")?.value;
   if (!shareUrl) {
     $("#qr-container").innerHTML =
-      '<p class="qr-fallback">Use Copy link or download the turn file.</p>';
+      '<p class="qr-fallback">Stay on this phone, or download the turn file.</p>';
     return;
   }
   renderQR($("#qr-container"), shareUrl);
@@ -286,6 +354,8 @@ function ensureQR() {
 
 async function copyShareLink() {
   const input = $("#share-url");
+  const linkBlock = $("#pass-link-block");
+  if (linkBlock) linkBlock.hidden = false;
   if (!input || !input.value) {
     toast("Use the turn file instead");
     return;
@@ -300,18 +370,55 @@ async function copyShareLink() {
   }
 }
 
-/* ---------- Join / name gate ---------- */
+function beginCurtainReady() {
+  if (isSolo(state)) {
+    pendingName = state.promptAuthor || lastAuthorName() || "Player";
+  } else {
+    const typed = $("#curtain-name")?.value?.trim();
+    if (!typed) {
+      toast("Enter your name");
+      $("#curtain-name")?.focus();
+      return;
+    }
+    pendingName = typed;
+  }
+  startPendingTurn();
+}
+
+function startPendingTurn() {
+  const phase = nextPhase(state);
+  if (phase === "reveal") {
+    startReveal();
+    return;
+  }
+  if (phase === "draw") {
+    const last = lastEntry(state);
+    const promptText =
+      last && last.t === "g" ? last.x : state.prompt;
+    showDraw(promptText, pendingName);
+  } else {
+    showDescribe();
+  }
+}
+
+/* ---------- Join / name gate (multi-device link path) ---------- */
 function showJoinTurn() {
   const phase = nextPhase(state);
   if (phase === "reveal") {
     startReveal();
     return;
   }
+  // Solo / same-phone resume: skip name gate if we already know the author
+  if (isSolo(state) && (state.promptAuthor || lastAuthorName())) {
+    pendingName = state.promptAuthor || lastAuthorName();
+    startPendingTurn();
+    return;
+  }
   showScreen("join");
   $("#join-role").textContent =
     phase === "draw" ? "Draw what you read" : "Describe what you see";
   $("#join-name").value = "";
-  $("#join-progress").textContent = `Turn ${state.chain.length + 1} of ${state.playerCount}`;
+  $("#join-progress").textContent = `Turn ${state.chain.length + 1} of ${turnTarget(state)}`;
 }
 
 function beginJoinedTurn() {
@@ -321,42 +428,7 @@ function beginJoinedTurn() {
     return;
   }
   pendingName = name;
-  const phase = nextPhase(state);
-  if (phase === "draw") {
-    const last = lastEntry(state);
-    const promptText =
-      last && last.t === "g" ? last.x : state.prompt;
-    showDraw(promptText, name);
-  } else {
-    showDescribe();
-  }
-}
-
-function beginHotseatTurn() {
-  const wrap = $("#hotseat-name-wrap");
-  if (wrap.hidden) {
-    wrap.hidden = false;
-    $("#hotseat-name").value = "";
-    $("#hotseat-name").focus();
-    return;
-  }
-  const name = $("#hotseat-name").value.trim();
-  if (!name) {
-    toast("Enter the next player's name");
-    return;
-  }
-  pendingName = name;
-  const phase = nextPhase(state);
-  if (phase === "draw") {
-    const last = lastEntry(state);
-    const promptText =
-      last && last.t === "g" ? last.x : state.prompt;
-    showDraw(promptText, name);
-  } else if (phase === "describe") {
-    showDescribe();
-  } else {
-    startReveal();
-  }
+  startPendingTurn();
 }
 
 /* ---------- Reveal ---------- */
@@ -438,7 +510,6 @@ function renderRevealStep() {
   }
 
   const step = steps[revealIndex];
-  // Crossfade via brief opacity (respects reduced-motion via CSS)
   root.style.opacity = "0";
   requestAnimationFrame(() => {
     let html = `
@@ -532,6 +603,7 @@ function init() {
     const draft = loadDraft();
     if (!draft || !draft.state) return;
     state = draft.state;
+    if (state.turns == null) state.turns = state.playerCount;
     pendingName = draft.name || "";
     if (draft.screen === "draw") {
       const last = lastEntry(state);
@@ -550,8 +622,11 @@ function init() {
   });
 
   // Setup
-  $$(".count-picker button").forEach((b) =>
+  $$(".count-picker:not(.turns-picker) button").forEach((b) =>
     b.addEventListener("click", () => selectCount(Number(b.dataset.n)))
+  );
+  $$(".turns-picker button").forEach((b) =>
+    b.addEventListener("click", () => selectSoloTurns(Number(b.dataset.turns)))
   );
   $("#btn-random-prompt").addEventListener("click", () => {
     $("#prompt-preview").textContent = randomPrompt();
@@ -573,6 +648,11 @@ function init() {
     state.prompt = prompt;
     state.promptAuthor = name;
     state.players = [name];
+    if (state.playerCount === 1) {
+      state.turns = soloTurns;
+    } else {
+      state.turns = state.playerCount;
+    }
     pendingName = name;
     showDraw(prompt, name);
   });
@@ -592,13 +672,20 @@ function init() {
   // Describe
   $("#btn-describe-submit").addEventListener("click", submitDescription);
 
-  // Pass
+  // Curtain handoff (hotseat-first). Copy/download only under “Another phone?”
+  $("#btn-curtain-ready").addEventListener("click", beginCurtainReady);
+  $("#curtain-name").addEventListener("input", updateCurtainCta);
+  $("#curtain-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      beginCurtainReady();
+    }
+  });
   $("#btn-copy-link").addEventListener("click", copyShareLink);
   $("#btn-download-turn").addEventListener("click", () => {
     downloadTurnFile(state, `picture-telephone-turn${state.chain.length}.pturn.json`);
     toast("Turn file downloaded");
   });
-  $("#btn-hotseat").addEventListener("click", beginHotseatTurn);
   $("#btn-pass-home").addEventListener("click", showHome);
   $("#qr-disclosure").addEventListener("toggle", () => {
     if ($("#qr-disclosure").open) ensureQR();

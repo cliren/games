@@ -3,13 +3,14 @@
  * Schema version 1.
  *
  * Soft hash budget 8KB / hard 16KB → turn-file path (locked Decision).
+ * Solo: playerCount === 1; turns = 3|4|5 (default 4). Multi: turns === playerCount.
  */
 
 const SCHEMA_V = 1;
 const STORAGE_KEY = "picture-telephone-draft";
-/** Soft limit (chars) — warn / prefer turn file */
+/** Soft limit (chars) — quiet hint; still prefer Next / Copy */
 const MAX_HASH_SOFT = 8192;
-/** Hard limit (chars) — force turn file, do not put in URL */
+/** Hard limit (chars) — force turn file for multi-device; never block hotseat */
 const MAX_HASH_HARD = 16384;
 
 /** @typedef {{ w: number, p: number[] }} Polyline */
@@ -17,6 +18,7 @@ const MAX_HASH_HARD = 16384;
 /** @typedef {{
  *   v: number,
  *   playerCount: number,
+ *   turns: number,
  *   players: string[],
  *   prompt: string,
  *   promptAuthor: string,
@@ -27,6 +29,7 @@ export function createEmptyState() {
   return {
     v: SCHEMA_V,
     playerCount: 3,
+    turns: 3,
     players: [],
     prompt: "",
     promptAuthor: "",
@@ -34,14 +37,23 @@ export function createEmptyState() {
   };
 }
 
+/** Target chain length (solo uses turns; older hashes fall back to playerCount). */
+export function turnTarget(state) {
+  return state.turns != null ? state.turns : state.playerCount;
+}
+
+export function isSolo(state) {
+  return state.playerCount === 1;
+}
+
 export function nextPhase(state) {
-  if (state.chain.length >= state.playerCount) return "reveal";
+  if (state.chain.length >= turnTarget(state)) return "reveal";
   if (state.chain.length === 0) return "draw";
   return state.chain.length % 2 === 1 ? "describe" : "draw";
 }
 
 export function turnsRemaining(state) {
-  return Math.max(0, state.playerCount - state.chain.length);
+  return Math.max(0, turnTarget(state) - state.chain.length);
 }
 
 export function lastEntry(state) {
@@ -150,10 +162,12 @@ export function deserializeState(encoded) {
     const json = new TextDecoder().decode(jsonBytes);
     const state = JSON.parse(json);
     if (state.v !== SCHEMA_V) throw new Error("Unsupported game version");
+    if (state.turns == null) state.turns = state.playerCount;
     return state;
   }
   const state = JSON.parse(payload);
   if (state.v !== SCHEMA_V) throw new Error("Unsupported game version");
+  if (state.turns == null) state.turns = state.playerCount;
   return state;
 }
 
