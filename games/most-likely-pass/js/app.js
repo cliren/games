@@ -7,7 +7,7 @@ import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js"
 
 const DRAFT_KEY = "most-likely-pass:draft:v1";
 const MAX_PLAYERS = 8;
-const MIN_PLAYERS = 3;
+const MIN_PLAYERS = 2;
 
 /** @typedef {{ v:1, names:string[], promptId:string, promptText:string, picks:{from:string,to:string}[], phase:string, turnIndex:number, revealIndex:number, curtainOpen:boolean, shuffled?:boolean }} State */
 
@@ -117,9 +117,26 @@ function renderNames() {
   chips.innerHTML = "";
   state.names.forEach((name, i) => {
     const chip = document.createElement("div");
-    chip.className = "chip";
-    const label = document.createElement("span");
-    label.textContent = name;
+    chip.className = "chip chip--edit";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 16;
+    input.value = name;
+    input.setAttribute("aria-label", `Player ${i + 1} name`);
+    input.addEventListener("change", () => {
+      let v = (input.value || "").trim().slice(0, 16);
+      if (!v) {
+        input.value = state.names[i];
+        return;
+      }
+      const lower = v.toLowerCase();
+      if (state.names.some((n, j) => j !== i && n.toLowerCase() === lower)) {
+        input.value = state.names[i];
+        return;
+      }
+      state.names[i] = v;
+      input.value = v;
+    });
     const rm = document.createElement("button");
     rm.type = "button";
     rm.className = "chip-remove";
@@ -129,7 +146,7 @@ function renderNames() {
       state.names.splice(i, 1);
       renderNames();
     });
-    chip.append(label, rm);
+    chip.append(input, rm);
     chips.appendChild(chip);
   });
 
@@ -137,7 +154,7 @@ function renderNames() {
   const hint = $("names-hint");
   const go = $("btn-names-go");
   if (n < MIN_PLAYERS) {
-    hint.textContent = "Add at least 3 names · or Shuffle";
+    hint.textContent = "Add at least 2 names · or Shuffle";
     hint.classList.add("warn");
     go.disabled = true;
   } else if (n >= MAX_PLAYERS) {

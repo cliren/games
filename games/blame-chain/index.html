@@ -39,12 +39,10 @@
       </header>
       <div class="card">
         <div class="chips" id="name-chips" aria-live="polite"></div>
-        <label class="label" for="name-input">Add a name</label>
-        <div class="name-add">
-          <input type="text" id="name-input" maxlength="16" autocomplete="off" placeholder="e.g. Maya" />
-          <button type="button" class="btn" id="btn-add-name">Add</button>
+        <p class="hint">2–8 · prefilled · edit a chip or Shuffle</p>
+        <div class="name-add" style="margin-top:8px">
+          <button type="button" class="btn btn-block" id="btn-add-name">+ Add player</button>
         </div>
-        <p class="hint">3–8 names. Shuffle for fun stand-ins.</p>
         <div class="stack" style="margin-top:16px">
           <button type="button" class="btn btn-primary btn-block" id="btn-names-start" disabled>Start</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-names-shuffle">Shuffle names</button>

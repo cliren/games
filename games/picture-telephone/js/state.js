@@ -28,8 +28,8 @@ const MAX_HASH_HARD = 16384;
 export function createEmptyState() {
   return {
     v: SCHEMA_V,
-    playerCount: 3,
-    turns: 3,
+    playerCount: 2,
+    turns: 2,
     players: [],
     prompt: "",
     promptAuthor: "",

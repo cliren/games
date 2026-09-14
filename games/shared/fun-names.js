@@ -67,5 +67,14 @@ export function shuffleFunNames(count) {
 }
 
 export function defaultPlayerCount() {
-  return 4;
+  return 2;
+}
+
+/**
+ * One new unique fun name, avoiding `avoid` (and any already used).
+ * @param {string[]} [avoid=[]]
+ * @returns {string}
+ */
+export function generateOneFunName(avoid = []) {
+  return generateFunNames(1, avoid)[0];
 }

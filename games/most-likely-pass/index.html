@@ -33,16 +33,14 @@
     <section id="screen-names" class="screen">
       <header class="brand">
         <h2 class="title">Who’s playing?</h2>
-        <p class="lede caption">3–8 people · same phone</p>
+        <p class="lede caption">2–8 people · same phone</p>
       </header>
       <div class="card">
         <div class="chips" id="name-chips" aria-live="polite"></div>
-        <label class="label" for="name-input">Add a name</label>
-        <div class="add-row">
-          <input type="text" id="name-input" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam" />
-          <button type="button" class="btn btn-sm" id="btn-add-name">Add</button>
+        <p class="hint" id="names-hint">2–8 · prefilled · edit or Shuffle</p>
+        <div class="add-row" style="margin-top:8px">
+          <button type="button" class="btn btn-block" id="btn-add-name">+ Add player</button>
         </div>
-        <p class="hint" id="names-hint">Add at least 3 names</p>
         <div class="stack" style="margin-top:16px">
           <button type="button" class="btn btn-primary btn-block" id="btn-names-go" disabled>Start</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-names-shuffle">Shuffle names</button>

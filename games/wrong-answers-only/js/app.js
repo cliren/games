@@ -3,7 +3,7 @@ import { initHowto } from "./howto.js";
 import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const DRAFT_KEY = "wrong-answers-only:draft:v1";
-const MIN_NAMES = 3;
+const MIN_NAMES = 2;
 const MAX_NAMES = 8;
 const NAME_MAX = 16;
 const ANSWER_MAX = 100;
@@ -179,17 +179,40 @@ function renderNameChips() {
   const wrap = $("#name-chips");
   wrap.innerHTML = "";
   state.names.forEach((name, i) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.setAttribute("aria-label", `Remove ${name}`);
-    chip.innerHTML = `<span>${escapeHtml(name)}</span><span class="chip-x" aria-hidden="true">×</span>`;
-    chip.addEventListener("click", () => {
+    const chip = document.createElement("div");
+    chip.className = "chip chip--edit";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = NAME_MAX;
+    input.value = name;
+    input.setAttribute("aria-label", `Player ${i + 1} name`);
+    input.addEventListener("change", () => {
+      let v = (input.value || "").trim().slice(0, NAME_MAX);
+      if (!v) {
+        input.value = state.names[i];
+        return;
+      }
+      const lower = v.toLowerCase();
+      if (state.names.some((n, j) => j !== i && n.toLowerCase() === lower)) {
+        input.value = state.names[i];
+        return;
+      }
+      state.names[i] = v;
+      input.value = v;
+      saveDraft();
+    });
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "chip-x";
+    rm.setAttribute("aria-label", `Remove ${name}`);
+    rm.textContent = "×";
+    rm.addEventListener("click", () => {
       state.names.splice(i, 1);
       saveDraft();
       renderNameChips();
       updateStartEnabled();
     });
+    chip.append(input, rm);
     wrap.appendChild(chip);
   });
   $("#names-count").textContent = `${state.names.length} / ${MAX_NAMES}`;

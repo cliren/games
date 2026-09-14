@@ -2,6 +2,7 @@ import { randomPrompt } from "./prompts.js";
 import { DrawCanvas, paintStrokesOnCanvas } from "./canvas.js";
 import { renderQR } from "./qr.js";
 import { initHowto } from "./howto.js";
+import { generateFunNames, generateOneFunName, defaultPlayerCount } from "../../shared/fun-names.js";
 import {
   createEmptyState,
   nextPhase,
@@ -36,6 +37,8 @@ let howto = null;
 let qrRendered = false;
 /** Solo turn picker value when playerCount === 1 */
 let soloTurns = 4;
+/** Editable multiplayer roster (fun names). Solo uses #player-name. */
+let roster = [];
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -113,11 +116,12 @@ function showHome() {
 function showSetup() {
   state = createEmptyState();
   soloTurns = 4;
+  roster = [];
   showScreen("setup");
-  $("#player-name").value = "";
   $("#custom-prompt").value = "";
   $("#prompt-preview").textContent = randomPrompt();
-  selectCount(3);
+  $("#player-name").value = generateOneFunName();
+  selectCount(defaultPlayerCount());
 }
 
 function selectSoloTurns(n) {
@@ -137,16 +141,87 @@ function selectCount(n) {
     b.classList.toggle("active", Number(b.dataset.n) === n);
   });
   const soloWrap = $("#solo-turns-wrap");
+  const soloName = $("#solo-name-wrap");
+  const rosterWrap = $("#roster-wrap");
   if (n === 1) {
     soloWrap.hidden = false;
+    if (soloName) soloName.hidden = false;
+    if (rosterWrap) rosterWrap.hidden = true;
     state.turns = soloTurns;
     selectSoloTurns(soloTurns);
     $("#count-hint").textContent = "Solo · " + soloTurns + " turns";
+    if (!$("#player-name").value.trim()) {
+      $("#player-name").value = generateOneFunName();
+    }
   } else {
     soloWrap.hidden = true;
+    if (soloName) soloName.hidden = true;
+    if (rosterWrap) rosterWrap.hidden = false;
     state.turns = n;
     $("#count-hint").textContent = n + " players · " + n + " turns";
+    // Keep edits when resizing up/down where possible
+    if (roster.length === n) {
+      renderRoster();
+    } else if (roster.length > n) {
+      roster = roster.slice(0, n);
+      renderRoster();
+    } else {
+      const extra = generateFunNames(n - roster.length, roster);
+      roster = roster.concat(extra);
+      renderRoster();
+    }
   }
+}
+
+function renderRoster() {
+  const list = $("#roster-list");
+  if (!list) return;
+  list.innerHTML = "";
+  roster.forEach((name, i) => {
+    const row = document.createElement("div");
+    row.className = "roster-seat";
+    const num = document.createElement("span");
+    num.className = "seat-n";
+    num.textContent = String(i + 1);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 24;
+    input.value = name;
+    input.setAttribute("aria-label", `Player ${i + 1}`);
+    input.autocomplete = "nickname";
+    input.addEventListener("change", () => {
+      let v = (input.value || "").trim().slice(0, 24);
+      if (!v) {
+        input.value = roster[i];
+        return;
+      }
+      const lower = v.toLowerCase();
+      if (roster.some((n, j) => j !== i && n.toLowerCase() === lower)) {
+        input.value = roster[i];
+        return;
+      }
+      roster[i] = v;
+      input.value = v;
+    });
+    row.append(num, input);
+    list.appendChild(row);
+  });
+}
+
+function shuffleRosterNames() {
+  if (state.playerCount === 1) {
+    $("#player-name").value = generateOneFunName();
+    return;
+  }
+  const n = Math.max(2, Math.min(8, state.playerCount | 0));
+  roster = generateFunNames(n);
+  renderRoster();
+}
+
+function readRosterFromDom() {
+  const inputs = $$("#roster-list input");
+  if (!inputs.length) return roster.slice();
+  return inputs.map((el) => (el.value || "").trim().slice(0, 24)).filter(Boolean);
 }
 
 /* ---------- Draw ---------- */
@@ -305,8 +380,14 @@ function showCurtain() {
     $("#curtain-name").value = state.promptAuthor || lastAuthorName() || "";
   } else {
     nameWrap.hidden = false;
-    $("#curtain-name").value = "";
-    $("#curtain-name").placeholder = "Your name";
+    // Prefill next roster seat so primary path is one tap (I’m {name})
+    const nextIdx = state.chain.length;
+    const nextName =
+      (state.players && state.players[nextIdx]) ||
+      (roster && roster[nextIdx]) ||
+      "";
+    $("#curtain-name").value = nextName;
+    $("#curtain-name").placeholder = nextName || "Your name";
   }
 
   // Fallback tools buried — never primary. Hotseat never requires download.
@@ -335,11 +416,8 @@ function showCurtain() {
   }
 
   updateCurtainCta();
-  if (solo) {
-    $("#btn-curtain-ready").focus();
-  } else {
-    $("#curtain-name").focus();
-  }
+  // Prefill → primary path is one tap on I’m {name}
+  $("#btn-curtain-ready").focus();
 }
 
 function ensureQR() {
@@ -766,26 +844,51 @@ function init() {
     $("#custom-prompt").value = "";
   });
   $("#btn-setup-back").addEventListener("click", showHome);
+  const shuffleBtn = $("#btn-shuffle-names");
+  if (shuffleBtn) shuffleBtn.addEventListener("click", shuffleRosterNames);
   $("#btn-setup-go").addEventListener("click", () => {
-    const name = $("#player-name").value.trim();
-    if (!name) {
-      toast("Enter your name");
-      return;
-    }
     const custom = $("#custom-prompt").value.trim();
     const prompt = custom || $("#prompt-preview").textContent.trim();
     if (!prompt) {
       toast("Need a prompt");
       return;
     }
-    state.prompt = prompt;
-    state.promptAuthor = name;
-    state.players = [name];
+    let name;
     if (state.playerCount === 1) {
+      name = $("#player-name").value.trim();
+      if (!name) {
+        toast("Enter your name");
+        return;
+      }
+      state.players = [name];
       state.turns = soloTurns;
     } else {
-      state.turns = state.playerCount;
+      roster = readRosterFromDom();
+      if (roster.length < 2) {
+        toast("Need at least 2 names");
+        return;
+      }
+      // Dedupe case-insensitively
+      const seen = new Set();
+      const clean = [];
+      for (const n of roster) {
+        const key = n.toLowerCase();
+        if (!n || seen.has(key)) continue;
+        seen.add(key);
+        clean.push(n);
+      }
+      if (clean.length < 2) {
+        toast("Need at least 2 unique names");
+        return;
+      }
+      roster = clean.slice(0, 8);
+      state.playerCount = roster.length;
+      state.turns = roster.length;
+      state.players = roster.slice();
+      name = roster[0];
     }
+    state.prompt = prompt;
+    state.promptAuthor = name;
     pendingName = name;
     showDraw(prompt, name);
   });

@@ -720,6 +720,9 @@ input:focus-visible,
   padding: 4px 0;
   outline: none;
 }
+.chip--edit .chip-remove {
+  flex-shrink: 0;
+}
 
 
 .stat-block--magnet {
