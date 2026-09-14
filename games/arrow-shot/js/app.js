@@ -1,15 +1,47 @@
 import { initHowto } from "./howto.js";
 
-const MAX_ARROWS = 5;
+const HARDNESS_KEY = "arrow-shot:hardness:v1";
 const MAX_PULL = 90;
-const POWER_SCALE = 0.18;
 const SETTLE_MS = 2200;
+
+const HARDNESS = {
+  easy: {
+    id: "easy",
+    label: "Easy",
+    arrows: 6,
+    gravity: 0.75,
+    powerScale: 0.22,
+    grabRadius: 180,
+    forgiveLeft: 0.45,
+  },
+  normal: {
+    id: "normal",
+    label: "Normal",
+    arrows: 5,
+    gravity: 0.9,
+    powerScale: 0.18,
+    grabRadius: 170,
+    forgiveLeft: 0.4,
+  },
+  hard: {
+    id: "hard",
+    label: "Hard",
+    arrows: 4,
+    gravity: 1.05,
+    powerScale: 0.15,
+    grabRadius: 130,
+    forgiveLeft: 0.32,
+  },
+};
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
 /** @type {ReturnType<typeof initHowto> | null} */
 let howto = null;
+
+/** @type {keyof typeof HARDNESS} */
+let hardness = loadHardness();
 
 /** @type {{
  *  arrowsLeft: number,
@@ -19,6 +51,9 @@ let howto = null;
  *  targetsHit: number,
  *  totalTargets: number,
  *  cleared: boolean,
+ *  maxArrows: number,
+ *  hardnessId: string,
+ *  hardnessLabel: string,
  * }} */
 let round = emptyRound();
 
@@ -26,6 +61,9 @@ let engine = null;
 let render = null;
 let runner = null;
 let world = null;
+/** Logical world size (physics + pointer space) */
+let worldW = 360;
+let worldH = 520;
 let bow = { x: 72, y: 0 };
 let arrowBody = null;
 let targets = [];
@@ -36,16 +74,44 @@ let flightTimer = null;
 let roundOver = false;
 let feedbackTimer = null;
 let resizeObs = null;
+/** Bound once to #stage; handlers read live canvas/world state */
+let stageInputBound = false;
+
+function loadHardness() {
+  try {
+    const v = localStorage.getItem(HARDNESS_KEY);
+    if (v && HARDNESS[v]) return /** @type {keyof typeof HARDNESS} */ (v);
+  } catch {
+    /* ignore */
+  }
+  return "normal";
+}
+
+function saveHardness(id) {
+  try {
+    localStorage.setItem(HARDNESS_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}
+
+function cfg() {
+  return HARDNESS[hardness] || HARDNESS.normal;
+}
 
 function emptyRound() {
+  const c = cfg();
   return {
-    arrowsLeft: MAX_ARROWS,
+    arrowsLeft: c.arrows,
     hits: 0,
     score: 0,
     arrowsUsed: 0,
     targetsHit: 0,
     totalTargets: 0,
     cleared: false,
+    maxArrows: c.arrows,
+    hardnessId: c.id,
+    hardnessLabel: c.label,
   };
 }
 
@@ -53,6 +119,7 @@ function showScreen(id) {
   $$(".screen").forEach((el) => el.classList.remove("active"));
   const screen = document.getElementById("screen-" + id);
   if (screen) screen.classList.add("active");
+  document.body.classList.toggle("playing", id === "play");
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
@@ -60,6 +127,8 @@ function updateHud() {
   $("#hud-arrows").textContent = String(round.arrowsLeft);
   $("#hud-hits").textContent = String(round.hits);
   $("#hud-score").textContent = String(round.score);
+  const hardEl = $("#hud-hardness");
+  if (hardEl) hardEl.textContent = round.hardnessLabel || cfg().label;
 }
 
 function showFeedback(text, kind) {
@@ -86,8 +155,10 @@ function cssVar(name, fallback) {
 
 function stageSize() {
   const wrap = $(".stage-wrap");
-  const w = Math.max(280, Math.floor(wrap.clientWidth || 360));
-  const h = Math.max(360, Math.floor(Math.min(window.innerHeight * 0.62, wrap.clientHeight || 520)));
+  if (!wrap) return { w: 360, h: 520 };
+  const rect = wrap.getBoundingClientRect();
+  const w = Math.max(280, Math.floor(rect.width) || 360);
+  const h = Math.max(280, Math.floor(rect.height) || 520);
   return { w, h };
 }
 
@@ -111,12 +182,12 @@ function destroyPhysics() {
   }
   if (render && Matter) {
     Matter.Render.stop(render);
-    if (render.canvas && render.canvas.parentNode) {
-      /* keep canvas element; Matter created its own — we use our #stage */
-    }
+    Matter.Events.off(render, "afterRender", drawOverlay);
     render = null;
   }
   if (engine && Matter) {
+    Matter.Events.off(engine, "collisionStart", onCollision);
+    Matter.Events.off(engine, "beforeUpdate", steerArrow);
     Matter.World.clear(engine.world, false);
     Matter.Engine.clear(engine);
     engine = null;
@@ -124,14 +195,36 @@ function destroyPhysics() {
   }
 }
 
-function buildTargets(Matter, w, h) {
-  const layouts = [
+/** Target layouts by hardness — fractions of world size */
+function targetLayouts(w, h, level) {
+  if (level === "easy") {
+    return [
+      { x: w * 0.7, y: h * 0.3, r: 36, pts: 20, label: "20" },
+      { x: w * 0.78, y: h * 0.52, r: 40, pts: 15, label: "15" },
+      { x: w * 0.66, y: h * 0.72, r: 34, pts: 25, label: "25" },
+    ];
+  }
+  if (level === "hard") {
+    return [
+      { x: w * 0.74, y: h * 0.22, r: 16, pts: 50, label: "50" },
+      { x: w * 0.88, y: h * 0.34, r: 18, pts: 40, label: "40" },
+      { x: w * 0.7, y: h * 0.48, r: 20, pts: 35, label: "35" },
+      { x: w * 0.86, y: h * 0.6, r: 17, pts: 45, label: "45" },
+      { x: w * 0.72, y: h * 0.74, r: 19, pts: 40, label: "40" },
+      { x: w * 0.9, y: h * 0.78, r: 15, pts: 55, label: "55" },
+    ];
+  }
+  // normal — mixed, current-ish
+  return [
     { x: w * 0.72, y: h * 0.28, r: 28, pts: 30, label: "30" },
     { x: w * 0.82, y: h * 0.48, r: 34, pts: 20, label: "20" },
     { x: w * 0.68, y: h * 0.68, r: 24, pts: 40, label: "40" },
     { x: w * 0.88, y: h * 0.22, r: 18, pts: 50, label: "50" },
   ];
+}
 
+function buildTargets(Matter, w, h) {
+  const layouts = targetLayouts(w, h, hardness);
   return layouts.map((t, i) => {
     const body = Matter.Bodies.circle(t.x, t.y, t.r, {
       isStatic: true,
@@ -152,8 +245,8 @@ function buildTargets(Matter, w, h) {
 function createArrow(Matter, x, y) {
   const shaft = Matter.Bodies.rectangle(x, y, 36, 5, {
     label: "arrow",
-    density: 0.004,
-    frictionAir: 0.012,
+    density: 0.0035,
+    frictionAir: 0.01,
     restitution: 0.05,
     render: {
       fillStyle: cssVar("--ink", "#1C1917"),
@@ -171,13 +264,17 @@ function initPhysics() {
 
   const canvas = $("#stage");
   const { w, h } = stageSize();
+  worldW = w;
+  worldH = h;
+  // Logical buffer size — keep in sync with Matter options (pixelRatio: 1)
   canvas.width = w;
   canvas.height = h;
 
   bow = { x: Math.max(56, w * 0.16), y: h * 0.62 };
 
+  const c = cfg();
   engine = Matter.Engine.create({
-    gravity: { x: 0, y: 1.05 },
+    gravity: { x: 0, y: c.gravity },
   });
   world = engine.world;
 
@@ -203,13 +300,12 @@ function initPhysics() {
       height: h,
       wireframes: false,
       background: cssVar("--surface", "#FFFFFF"),
-      pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+      // Keep 1 so canvas buffer == logical world; avoids dpr pointer skew
+      pixelRatio: 1,
     },
   });
 
-  // Custom after-render for bow, pull band, rings, labels
   Matter.Events.on(render, "afterRender", drawOverlay);
-
   Matter.Events.on(engine, "collisionStart", onCollision);
 
   runner = Matter.Runner.create();
@@ -217,14 +313,13 @@ function initPhysics() {
   Matter.Render.run(render);
 
   spawnNockedArrow();
-  bindStageInput(canvas);
+  bindStageInput();
 
   if (typeof ResizeObserver !== "undefined") {
     resizeObs = new ResizeObserver(() => {
       if (!$("#screen-play").classList.contains("active") || inFlight || aiming) return;
-      // soft resize: rebuild only if size changed a lot
       const next = stageSize();
-      if (Math.abs(next.w - canvas.width) > 24 || Math.abs(next.h - canvas.height) > 24) {
+      if (Math.abs(next.w - worldW) > 24 || Math.abs(next.h - worldH) > 24) {
         const keep = { ...round };
         initPhysics();
         round = keep;
@@ -250,9 +345,8 @@ function spawnNockedArrow() {
 function drawOverlay() {
   if (!render) return;
   const ctx = render.context;
-  const canvas = render.canvas;
-  const w = canvas.width;
-  const h = canvas.height;
+  const w = worldW;
+  const h = worldH;
 
   // Ground stripe
   ctx.fillStyle = cssVar("--accent-wash", "rgba(251,113,133,0.12)");
@@ -299,7 +393,9 @@ function drawOverlay() {
   ctx.arc(bow.x - 8, bow.y, 28, -Math.PI * 0.55, Math.PI * 0.55);
   ctx.stroke();
 
-  // Aim band + ghost arrow while pulling
+  const powerScale = cfg().powerScale;
+
+  // Aim band + trajectory while pulling
   if (aiming && arrowBody) {
     const ax = bow.x + pull.x;
     const ay = bow.y + pull.y;
@@ -311,22 +407,24 @@ function drawOverlay() {
     ctx.lineTo(bow.x - 8, bow.y + 26);
     ctx.stroke();
 
-    // Trajectory dots
     const power = Math.min(Math.hypot(pull.x, pull.y), MAX_PULL);
     if (power > 8) {
-      const vx = (-pull.x) * POWER_SCALE;
-      const vy = (-pull.y) * POWER_SCALE;
+      // Match releaseShot impulse + approx air friction / gravity
+      const vx0 = (-pull.x) * powerScale;
+      const vy0 = (-pull.y) * powerScale;
       ctx.fillStyle = cssVar("--accent", "#FB7185");
       let px = bow.x;
       let py = bow.y;
-      let pvx = vx;
-      let pvy = vy;
-      const g = (engine && engine.gravity.y) || 1;
-      for (let i = 0; i < 14; i++) {
-        pvx *= 0.998;
-        pvy += g * 0.35;
-        px += pvx * 2.2;
-        py += pvy * 2.2;
+      let pvx = vx0;
+      let pvy = vy0;
+      const g = (engine && engine.gravity.y) || cfg().gravity;
+      // Matter applies gravity each tick ~ (gravity.y * 0.001 * delta * force); approximate dots
+      const air = 0.99;
+      for (let i = 0; i < 16; i++) {
+        pvx *= air;
+        pvy = pvy * air + g * 0.4;
+        px += pvx * 2.4;
+        py += pvy * 2.4;
         if (i % 2 === 0) {
           ctx.beginPath();
           ctx.arc(px, py, 2.5, 0, Math.PI * 2);
@@ -335,7 +433,6 @@ function drawOverlay() {
       }
     }
   } else if (!inFlight && arrowBody) {
-    // idle string
     ctx.strokeStyle = cssVar("--ink-soft", "#78716C");
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -345,7 +442,6 @@ function drawOverlay() {
     ctx.stroke();
   }
 
-  // Arrow tip marker when in flight / nocked
   if (arrowBody) {
     const tip = arrowTip(arrowBody);
     ctx.fillStyle = cssVar("--accent", "#FB7185");
@@ -386,7 +482,6 @@ function onCollision(event) {
     updateHud();
     showFeedback(`Hit +${pts}`, "hit");
 
-    // Stop arrow on hit for clarity
     Matter.Body.setVelocity(arrowBody, { x: 0, y: 0 });
     Matter.Body.setAngularVelocity(arrowBody, 0);
     Matter.Body.setStatic(arrowBody, true);
@@ -405,31 +500,52 @@ function onCollision(event) {
   }
 }
 
+/**
+ * Map pointer to logical world coords (render.options / worldW×worldH),
+ * never raw canvas.width when dpr ≠ 1.
+ */
 function pointerPos(e, canvas) {
   const rect = canvas.getBoundingClientRect();
-  const src = e.touches && e.touches[0] ? e.touches[0] : e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : e;
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
+  const src =
+    e.touches && e.touches[0]
+      ? e.touches[0]
+      : e.changedTouches && e.changedTouches[0]
+        ? e.changedTouches[0]
+        : e;
+  const logicalW =
+    (render && render.options && render.options.width) || worldW || rect.width;
+  const logicalH =
+    (render && render.options && render.options.height) || worldH || rect.height;
+  const scaleX = logicalW / (rect.width || 1);
+  const scaleY = logicalH / (rect.height || 1);
   return {
     x: (src.clientX - rect.left) * scaleX,
     y: (src.clientY - rect.top) * scaleY,
   };
 }
 
-function bindStageInput(canvas) {
-  // Replace listeners by cloning node? Better: mark and use once-bound flag
-  if (canvas.dataset.bound === "1") return;
-  canvas.dataset.bound = "1";
+function canStartAim(p) {
+  const c = cfg();
+  const dx = p.x - bow.x;
+  const dy = p.y - bow.y;
+  if (Math.hypot(dx, dy) <= c.grabRadius) return true;
+  // Finger-friendly: start drag anywhere on left portion of stage
+  if (p.x <= worldW * c.forgiveLeft) return true;
+  return false;
+}
+
+function bindStageInput() {
+  const canvas = $("#stage");
+  if (!canvas || stageInputBound) return;
+  stageInputBound = true;
 
   const onDown = (e) => {
-    if (!$("#screen-play").classList.contains("active")) return;
+    const stage = $("#stage");
+    if (!stage || !$("#screen-play").classList.contains("active")) return;
     if (inFlight || roundOver || round.arrowsLeft <= 0 || !arrowBody) return;
     e.preventDefault();
-    const p = pointerPos(e, canvas);
-    // start aim if near bow / arrow
-    const dx = p.x - bow.x;
-    const dy = p.y - bow.y;
-    if (Math.hypot(dx, dy) > 120) return;
+    const p = pointerPos(e, stage);
+    if (!canStartAim(p)) return;
     aiming = true;
     document.body.classList.add("is-aiming");
     updatePull(p);
@@ -437,8 +553,10 @@ function bindStageInput(canvas) {
 
   const onMove = (e) => {
     if (!aiming) return;
+    const stage = $("#stage");
+    if (!stage) return;
     e.preventDefault();
-    updatePull(pointerPos(e, canvas));
+    updatePull(pointerPos(e, stage));
   };
 
   const onUp = (e) => {
@@ -449,7 +567,10 @@ function bindStageInput(canvas) {
     releaseShot();
   };
 
-  canvas.addEventListener("pointerdown", onDown, { passive: false });
+  // Bind on stage-wrap too so absolute canvas / replaced sizing still gets events
+  const wrap = $(".stage-wrap");
+  const target = wrap || canvas;
+  target.addEventListener("pointerdown", onDown, { passive: false });
   window.addEventListener("pointermove", onMove, { passive: false });
   window.addEventListener("pointerup", onUp, { passive: false });
   window.addEventListener("pointercancel", onUp, { passive: false });
@@ -459,7 +580,6 @@ function updatePull(p) {
   const Matter = getMatter();
   let dx = p.x - bow.x;
   let dy = p.y - bow.y;
-  // Prefer pulling back (left-ish)
   const len = Math.hypot(dx, dy) || 1;
   const clamped = Math.min(len, MAX_PULL);
   dx = (dx / len) * clamped;
@@ -477,7 +597,6 @@ function releaseShot() {
   const Matter = getMatter();
   const power = Math.hypot(pull.x, pull.y);
   if (!arrowBody || power < 12) {
-    // reset nock
     if (arrowBody) {
       Matter.Body.setPosition(arrowBody, { x: bow.x, y: bow.y });
       Matter.Body.setAngle(arrowBody, 0);
@@ -486,8 +605,9 @@ function releaseShot() {
     return;
   }
 
-  const vx = (-pull.x) * POWER_SCALE;
-  const vy = (-pull.y) * POWER_SCALE;
+  const powerScale = cfg().powerScale;
+  const vx = (-pull.x) * powerScale;
+  const vy = (-pull.y) * powerScale;
   const angle = Math.atan2(vy, vx);
 
   Matter.Body.setStatic(arrowBody, false);
@@ -495,7 +615,6 @@ function releaseShot() {
   Matter.Body.setVelocity(arrowBody, { x: vx, y: vy });
   Matter.Body.setAngularVelocity(arrowBody, 0);
 
-  // Keep arrow pointed along velocity
   Matter.Events.on(engine, "beforeUpdate", steerArrow);
 
   round.arrowsLeft -= 1;
@@ -508,7 +627,6 @@ function releaseShot() {
   clearTimeout(flightTimer);
   flightTimer = setTimeout(() => {
     if (!inFlight) return;
-    // Miss — no new hit this flight
     showFeedback("Miss", "miss");
     inFlight = false;
     afterShot();
@@ -528,8 +646,8 @@ function steerArrow() {
 
 function afterShot() {
   const Matter = getMatter();
-  Matter.Events.off(engine, "beforeUpdate", steerArrow);
-  if (arrowBody) {
+  if (engine) Matter.Events.off(engine, "beforeUpdate", steerArrow);
+  if (arrowBody && world) {
     Matter.Composite.remove(world, arrowBody);
     arrowBody = null;
   }
@@ -563,6 +681,7 @@ function showHome() {
   round = emptyRound();
   roundOver = false;
   showScreen("home");
+  syncHardnessUI();
 }
 
 function startRound() {
@@ -572,10 +691,12 @@ function startRound() {
   showScreen("play");
   updateHud();
   $("#play-hint").textContent = "Drag back to aim · release to shoot";
-  // layout after display
+  // Wait two frames so flex layout + stage-wrap have real bounds
   requestAnimationFrame(() => {
-    initPhysics();
-    updateHud();
+    requestAnimationFrame(() => {
+      initPhysics();
+      updateHud();
+    });
   });
 }
 
@@ -583,34 +704,50 @@ function showResults() {
   destroyPhysics();
   showScreen("results");
 
+  const maxA = round.maxArrows || cfg().arrows;
   $("#stat-hits").textContent = String(round.hits);
   $("#stat-score").textContent = String(round.score);
-  $("#stat-arrows").textContent = `${round.arrowsUsed} / ${MAX_ARROWS}`;
+  $("#stat-arrows").textContent = `${round.arrowsUsed} / ${maxA}`;
 
   let sub = "Nice shooting";
   let note = "";
+  const diff = round.hardnessLabel || cfg().label;
   if (round.cleared) {
     sub = "All targets cleared!";
-    const bonus = Math.max(0, (MAX_ARROWS - round.arrowsUsed) * 15);
+    const bonus = Math.max(0, (maxA - round.arrowsUsed) * 15);
     if (bonus > 0) {
       round.score += bonus;
       $("#stat-score").textContent = String(round.score);
-      note = `Clear bonus +${bonus}`;
+      note = `Clear bonus +${bonus} · ${diff}`;
     } else {
-      note = "Perfect clear";
+      note = `Perfect clear · ${diff}`;
     }
   } else if (round.hits === 0) {
     sub = "No hits this round";
-    note = "Pull farther for more power · aim above the mark";
-  } else if (round.hits >= 3) {
+    note = `Pull farther for more power · ${diff}`;
+  } else if (round.hits >= Math.ceil((round.totalTargets || 4) * 0.6)) {
     sub = "Sharp aim";
-    note = `${round.hits} hits · ${round.score} points`;
+    note = `${round.hits} hits · ${round.score} points · ${diff}`;
   } else {
     sub = "Round over";
-    note = `${round.hits} hit${round.hits === 1 ? "" : "s"} · ${round.score} points`;
+    note = `${round.hits} hit${round.hits === 1 ? "" : "s"} · ${round.score} points · ${diff}`;
   }
   $("#results-sub").textContent = sub;
   $("#results-note").textContent = note;
+}
+
+function syncHardnessUI() {
+  $$("#hardness-seg .seg-btn").forEach((btn) => {
+    const id = btn.getAttribute("data-hardness");
+    btn.setAttribute("aria-pressed", id === hardness ? "true" : "false");
+  });
+}
+
+function setHardness(id) {
+  if (!HARDNESS[id]) return;
+  hardness = /** @type {keyof typeof HARDNESS} */ (id);
+  saveHardness(id);
+  syncHardnessUI();
 }
 
 function init() {
@@ -625,6 +762,16 @@ function init() {
   $("#btn-play").addEventListener("click", () => startRound());
   $("#btn-again").addEventListener("click", () => startRound());
 
+  const seg = $("#hardness-seg");
+  if (seg) {
+    seg.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setHardness(btn.getAttribute("data-hardness"));
+    });
+  }
+
+  syncHardnessUI();
   showHome();
   howto.maybeAutoShow();
 }

@@ -26,6 +26,14 @@
         <p class="caption meta-line">1 · ~3 min</p>
       </header>
       <div class="card stack">
+        <div class="hardness" role="group" aria-label="Difficulty">
+          <span class="hardness-label">Difficulty</span>
+          <div class="seg" id="hardness-seg">
+            <button type="button" class="seg-btn" data-hardness="easy" aria-pressed="false">Easy</button>
+            <button type="button" class="seg-btn" data-hardness="normal" aria-pressed="true">Normal</button>
+            <button type="button" class="seg-btn" data-hardness="hard" aria-pressed="false">Hard</button>
+          </div>
+        </div>
         <button type="button" class="btn btn-primary btn-block" id="btn-play">Play</button>
       </div>
     </section>
@@ -35,12 +43,13 @@
         <span class="hud-item"><span class="hud-label">Arrows</span> <strong id="hud-arrows">5</strong></span>
         <span class="hud-item"><span class="hud-label">Hits</span> <strong id="hud-hits">0</strong></span>
         <span class="hud-item"><span class="hud-label">Score</span> <strong id="hud-score">0</strong></span>
+        <span class="hud-item"><span class="hud-label">Level</span> <strong id="hud-hardness">Normal</strong></span>
       </div>
       <div class="stage-wrap">
         <canvas id="stage" width="360" height="520" aria-label="Archery stage — drag to aim, release to shoot"></canvas>
         <div class="feedback" id="feedback" hidden aria-live="assertive"></div>
       </div>
-      <p class="hint center" id="play-hint">Drag back to aim · release to shoot</p>
+      <p class="hint center play-hint" id="play-hint">Drag back to aim · release to shoot</p>
     </section>
 
     <section id="screen-results" class="screen">
@@ -81,7 +90,7 @@
       <ol class="howto-steps">
         <li>Pull back to aim.</li>
         <li>Release to shoot.</li>
-        <li>Hit the targets — 5 arrows.</li>
+        <li>Hit the targets before arrows run out.</li>
       </ol>
       <button type="button" class="btn btn-primary btn-block" id="btn-howto-gotit">Got it</button>
     </div>
