@@ -412,8 +412,12 @@ function revealVote() {
     });
     list.appendChild(btn);
   });
-  $("#btn-vote-done").hidden = true;
-  $("#btn-vote-done").disabled = true;
+  const done = $("#btn-vote-done");
+  if (done) {
+    done.hidden = false;
+    done.disabled = false;
+    done.classList.add("visually-hidden");
+  }
 }
 
 function commitVote() {
@@ -468,7 +472,7 @@ function showPodium() {
     li.className = "board-row" + (isFirst ? " board-main" : "") + (row.tooRight ? " too-right" : "");
     let tag = "";
     if (row.tooRight) {
-      tag = '<span class="board-tag too-right-tag">Too right</span>';
+      tag = '<span class="board-tag too-right">Too right</span>';
     } else if (isFirst) {
       tag = '<span class="board-tag winner">Winner</span>';
     } else if (row.votes === 0) {
@@ -483,6 +487,22 @@ function showPodium() {
     `;
     list.appendChild(li);
   });
+
+  const sub = $("#podium-sub");
+  if (sub) {
+    const survivors = tallies.filter((t) => !t.tooRight);
+    const allTooRight = tallies.length > 0 && survivors.length === 0;
+    const noVotes = survivors.length > 0 && survivors.every((t) => t.votes === 0);
+    if (allTooRight) sub.textContent = "Nobody survived";
+    else if (noVotes || topVotes === 0) sub.textContent = "Nobody bought it";
+    else {
+      const winners = survivors.filter((t) => t.votes === topVotes);
+      sub.textContent =
+        winners.length > 1
+          ? `Tie · ${winners.map((w) => w.from).join(", ")}`
+          : "";
+    }
+  }
 }
 
 function anotherRound() {

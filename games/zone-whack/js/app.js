@@ -41,6 +41,7 @@ let audioCtx = null;
 
 let rafId = 0;
 let roundStart = 0;
+let lastFrameAt = 0;
 let nextSpawnAt = 0;
 let playing = false;
 /** @type {Array<{ zone: number, el: HTMLElement, expires: number, hit: boolean }>} */
@@ -86,10 +87,10 @@ function updateRotateGate() {
   const show =
     needsLandscape()
     && !isLandscape()
-    && (state.phase === "ready" || state.phase === "play" || state.phase === "count");
+    && (state.phase === "play" || state.phase === "count");
   gate.hidden = !show;
   if (show && playing) {
-    /* pause visuals only — timer keeps running once started; gate blocks input */
+    /* tick() freezes roundStart / spawn / mole expiry while gated (Corner Claim pattern) */
   }
 }
 
@@ -145,6 +146,12 @@ function renderPreview() {
   const arena = $("#preview-arena");
   if (!arena) return;
   const zones = pickZones();
+  if (!zones.length) {
+    arena.hidden = true;
+    arena.innerHTML = "";
+    return;
+  }
+  arena.hidden = false;
   arena.dataset.n = String(zones.length);
   arena.innerHTML = zones
     .map(
@@ -307,6 +314,20 @@ function stopRound() {
 function tick(now) {
   if (!playing) return;
 
+  const gated = needsLandscape() && !isLandscape();
+  if (gated) {
+    /* Freeze round clock + spawn/mole timers while landscape gate covers play */
+    const dt = now - lastFrameAt;
+    roundStart += dt;
+    nextSpawnAt += dt;
+    for (const m of moles) {
+      m.expires += dt;
+    }
+    lastFrameAt = now;
+    rafId = requestAnimationFrame(tick);
+    return;
+  }
+
   const elapsed = now - roundStart;
   const left = Math.max(0, DATA.roundMs - elapsed);
   const secs = Math.ceil(left / 1000);
@@ -328,6 +349,7 @@ function tick(now) {
     return;
   }
 
+  lastFrameAt = now;
   rafId = requestAnimationFrame(tick);
 }
 
@@ -414,15 +436,16 @@ function startCountdown() {
 function beginPlay() {
   if (needsLandscape() && !isLandscape()) {
     updateRotateGate();
-    /* Wait until landscape — poll via orientation listener; auto-start when clear */
+    /* Keep watching until landscape — resume without resetting the round */
     const wait = () => {
-      if (isLandscape()) {
-        updateRotateGate();
-        actuallyStart();
-      }
+      if (!isLandscape()) return;
+      window.removeEventListener("orientationchange", wait);
+      window.removeEventListener("resize", wait);
+      updateRotateGate();
+      actuallyStart();
     };
-    window.addEventListener("orientationchange", wait, { once: true });
-    window.addEventListener("resize", wait, { once: true });
+    window.addEventListener("orientationchange", wait);
+    window.addEventListener("resize", wait);
     return;
   }
   actuallyStart();
@@ -431,6 +454,7 @@ function beginPlay() {
 function actuallyStart() {
   playing = true;
   roundStart = performance.now();
+  lastFrameAt = roundStart;
   nextSpawnAt = roundStart + 200;
   const timer = $("#play-timer");
   if (timer) timer.textContent = String(Math.ceil(DATA.roundMs / 1000));
@@ -443,13 +467,14 @@ function selectCount(n) {
     const v = Number(btn.getAttribute("data-count"));
     btn.setAttribute("aria-pressed", v === n ? "true" : "false");
   });
-  const next = $("#btn-count-next");
-  if (next) next.disabled = !n;
+  const go = $("#btn-count-go");
+  if (go) go.disabled = !n;
   const hint = $("#count-hint");
   if (hint) {
     hint.textContent =
       n >= 3 ? "Rotate to landscape before Go" : "Split left / right";
   }
+  renderPreview();
   updateRotateGate();
 }
 
@@ -457,8 +482,8 @@ function bind() {
   $("#btn-play")?.addEventListener("click", () => {
     ensureAudio();
     selectCount(0);
-    const next = $("#btn-count-next");
-    if (next) next.disabled = true;
+    const go = $("#btn-count-go");
+    if (go) go.disabled = true;
     $$(".count-btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
     showScreen("count");
   });
@@ -469,16 +494,8 @@ function bind() {
     });
   });
 
-  $("#btn-count-next")?.addEventListener("click", () => {
+  $("#btn-count-go")?.addEventListener("click", () => {
     if (!state.playerCount) return;
-    renderPreview();
-    showScreen("ready");
-  });
-
-  $("#btn-count-back")?.addEventListener("click", () => showScreen("home"));
-  $("#btn-ready-back")?.addEventListener("click", () => showScreen("count"));
-
-  $("#btn-ready-go")?.addEventListener("click", () => {
     if (needsLandscape() && !isLandscape()) {
       updateRotateGate();
       return;
@@ -486,9 +503,16 @@ function bind() {
     startCountdown();
   });
 
+  $("#btn-count-back")?.addEventListener("click", () => showScreen("home"));
+
   $("#btn-again")?.addEventListener("click", () => {
-    renderPreview();
-    showScreen("ready");
+    if (needsLandscape() && !isLandscape()) {
+      showScreen("count");
+      renderPreview();
+      updateRotateGate();
+      return;
+    }
+    startCountdown();
   });
 
   $("#btn-new")?.addEventListener("click", () => {

@@ -387,8 +387,25 @@ async function requestMotionPermission() {
   return { ok: true, reason: "implicit" };
 }
 
+function prefersHoldFallback() {
+  const DME = window.DeviceMotionEvent;
+  if (DME && typeof DME.requestPermission === "function") return false;
+  try {
+    const fine = window.matchMedia("(pointer: fine)").matches;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    if (fine && !coarse) return true;
+  } catch {
+    /* ignore */
+  }
+  return !DME;
+}
+
 async function onStartMeasuring() {
   if (measure.running) return;
+  if (prefersHoldFallback()) {
+    beginHoldMode("Hold the button still for 5s.");
+    return;
+  }
   const perm = await requestMotionPermission();
   if (!perm.ok) {
     beginHoldMode("Motion blocked. Hold the button still for 5s.");

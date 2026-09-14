@@ -3,7 +3,7 @@
  * Versus (2–4 split) · Hotseat (2–8 pass-the-phone).
  */
 import { initHowto } from "./howto.js";
-import { generateFunNames, shuffleFunNames } from "../../shared/fun-names.js";
+import { generateFunNames, generateOneFunName, shuffleFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +24,52 @@ let DATA = {
 const MIN_HOTSEAT = 2;
 const MAX_HOTSEAT = 8;
 const STUN_MS = 900;
+const STUN_MS = 900;
+const MODE_KEY = "gf:lastMode:v1";
+const VERSUS_COUNT_KEY = "gf:lastVersusCount:v1";
+
+/** Mid-play landscape pause (3–4 versus) */
+let versusPaused = false;
+let waitStartedAt = 0;
+let waitDelayMs = 0;
+let waitRemainingMs = 0;
+let pauseBeganAt = 0;
+let versusGateWatchOn = false;
+
+function saveLastMode(mode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadLastMode() {
+  try {
+    const m = localStorage.getItem(MODE_KEY);
+    return m === "versus" || m === "hotseat" ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveVersusCount(n) {
+  try {
+    localStorage.setItem(VERSUS_COUNT_KEY, String(n));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadVersusCount() {
+  try {
+    const n = Number(localStorage.getItem(VERSUS_COUNT_KEY));
+    return n >= 2 && n <= 4 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 
 const screens = {
   home: $("screen-home"),
@@ -227,15 +273,91 @@ function beginVersusRound() {
   arena.classList.add("is-wait");
   hideBanner("versus-banner");
 
-  const delay = randomWait();
+  versusPaused = false;
+  waitDelayMs = randomWait();
+  waitStartedAt = performance.now();
+  waitRemainingMs = waitDelayMs;
+  armVersusWait(waitDelayMs);
+  startVersusGateWatch();
+  updateVersusPlayGate();
+}
+
+function armVersusWait(delay) {
+  clearWaitTimer();
+  waitDelayMs = delay;
+  waitStartedAt = performance.now();
+  waitRemainingMs = delay;
   state.waitTimer = window.setTimeout(() => {
+    if (versusPaused) return;
     state.phase = "green";
     state.flashAt = performance.now();
-    arena.classList.remove("is-wait");
-    arena.classList.add("is-green");
+    const arena = $("versus-arena");
+    if (arena) {
+      arena.classList.remove("is-wait");
+      arena.classList.add("is-green");
+    }
     blipFlash();
   }, delay);
 }
+
+function pauseVersusForLandscape() {
+  if (versusPaused) return;
+  if (state.phase !== "wait" && state.phase !== "green") return;
+  versusPaused = true;
+  pauseBeganAt = performance.now();
+  if (state.phase === "wait") {
+    waitRemainingMs = Math.max(80, waitDelayMs - (performance.now() - waitStartedAt));
+    clearWaitTimer();
+  }
+}
+
+function resumeVersusFromPause() {
+  if (!versusPaused) return;
+  const pausedFor = performance.now() - pauseBeganAt;
+  versusPaused = false;
+  if (state.phase === "wait") {
+    armVersusWait(waitRemainingMs);
+  } else if (state.phase === "green") {
+    /* Exclude pause from reaction clock */
+    state.flashAt += pausedFor;
+  }
+}
+
+function updateVersusPlayGate() {
+  const gate = $("play-rotate-gate");
+  if (!gate) return;
+  const onVersus =
+    state.mode === "versus"
+    && screens.versus
+    && screens.versus.classList.contains("active")
+    && (state.phase === "wait" || state.phase === "green");
+  const show = onVersus && needsLandscape(state.versusCount) && !isLandscape();
+  gate.hidden = !show;
+  if (show) pauseVersusForLandscape();
+  else if (versusPaused) resumeVersusFromPause();
+}
+
+function _versusGateCheck() {
+  updateVersusPlayGate();
+}
+
+function startVersusGateWatch() {
+  if (versusGateWatchOn) return;
+  versusGateWatchOn = true;
+  window.addEventListener("resize", _versusGateCheck);
+  window.addEventListener("orientationchange", _versusGateCheck);
+}
+
+function stopVersusGateWatch() {
+  if (!versusGateWatchOn) return;
+  versusGateWatchOn = false;
+  window.removeEventListener("resize", _versusGateCheck);
+  window.removeEventListener("orientationchange", _versusGateCheck);
+  const gate = $("play-rotate-gate");
+  if (gate) gate.hidden = true;
+  versusPaused = false;
+}
+
 
 function renderVersusHud() {
   const hud = $("versus-hud");
@@ -282,6 +404,7 @@ function renderVersusZones() {
 function onVersusPointer(e, index) {
   e.preventDefault();
   e.stopPropagation();
+  if (versusPaused) return;
   if (state.phase === "resolved" || state.phase === "idle") return;
 
   if (state.phase === "wait") {
@@ -323,6 +446,7 @@ function falseStartVersus(index) {
 function resolveVersusRound(index, ms) {
   state.phase = "resolved";
   clearWaitTimer();
+  stopVersusGateWatch();
   state.winnerIndex = index;
   state.winnerMs = ms;
   state.scores[index] += 1;
@@ -580,13 +704,9 @@ function renderNameChips() {
   $("btn-names-start").disabled = state.names.length < MIN_HOTSEAT;
 }
 
-function addName(raw) {
-  const name = String(raw || "").trim().slice(0, 16);
-  if (!name) return;
+function addName() {
   if (state.names.length >= MAX_HOTSEAT) return;
-  const key = name.toLowerCase();
-  if (state.names.some((n) => n.toLowerCase() === key)) return;
-  state.names.push(name);
+  state.names.push(generateOneFunName(state.names));
   renderNameChips();
 }
 
@@ -617,6 +737,7 @@ function hideBanner(id) {
 function resetToHome() {
   clearWaitTimer();
   stopLandscapeWatch();
+  stopVersusGateWatch();
   _landscapeOnOk = null;
   state.mode = null;
   state.versusCount = 0;
@@ -655,27 +776,60 @@ function wire() {
   });
   howto.maybeAutoShow();
 
+  function goVersusCount(preselect) {
+    state.versusCount = 0;
+    document.querySelectorAll(".count-btn").forEach((b) => b.classList.remove("selected"));
+    $("btn-versus-start").disabled = true;
+    const n = preselect || loadVersusCount();
+    if (n) {
+      state.versusCount = n;
+      document.querySelectorAll(".count-btn").forEach((b) => {
+        const on = Number(b.getAttribute("data-count")) === n;
+        b.classList.toggle("selected", on);
+      });
+      $("btn-versus-start").disabled = false;
+      $("versus-count-hint").textContent =
+        n >= 3 ? "3–4 need landscape" : "Split left / right";
+    }
+    showScreen("versusCount");
+  }
+
+  function goHotseatNames() {
+    state.names = generateFunNames(defaultPlayerCount());
+    renderNameChips();
+    showScreen("names");
+  }
+
   $("btn-play").addEventListener("click", () => {
     ensureAudio();
+    const last = loadLastMode();
+    if (last === "versus") {
+      goVersusCount();
+      return;
+    }
+    if (last === "hotseat") {
+      goHotseatNames();
+      return;
+    }
     showScreen("mode");
   });
 
   $("btn-mode-back").addEventListener("click", () => showScreen("home"));
   $("btn-mode-versus").addEventListener("click", () => {
     ensureAudio();
-    state.versusCount = 0;
-    document.querySelectorAll(".count-btn").forEach((b) => b.classList.remove("selected"));
-    $("btn-versus-start").disabled = true;
-    showScreen("versusCount");
+    saveLastMode("versus");
+    goVersusCount();
   });
   $("btn-mode-hotseat").addEventListener("click", () => {
     ensureAudio();
-    state.names = generateFunNames(4);
-    renderNameChips();
-    showScreen("names");
+    saveLastMode("hotseat");
+    goHotseatNames();
   });
 
-  $("btn-versus-back").addEventListener("click", () => showScreen("mode"));
+  $("btn-versus-back").addEventListener("click", () => {
+    /* Returning players skipped mode — Back lands on mode so they can switch */
+    showScreen("mode");
+  });
   document.querySelectorAll(".count-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const n = Number(btn.getAttribute("data-count"));
@@ -691,6 +845,8 @@ function wire() {
     ensureAudio();
     const n = state.versusCount;
     if (!n) return;
+    saveLastMode("versus");
+    saveVersusCount(n);
     if (needsLandscape(n) && !isLandscape()) {
       showScreen("rotate");
       watchLandscape(() => setupVersus(n));
@@ -707,15 +863,7 @@ function wire() {
 
   $("btn-names-back").addEventListener("click", () => showScreen("mode"));
   $("btn-add-name").addEventListener("click", () => {
-    addName(/** @type {HTMLInputElement} */ ($("name-input")).value);
-    /** @type {HTMLInputElement} */ ($("name-input")).value = "";
-    $("name-input").focus();
-  });
-  $("name-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      $("btn-add-name").click();
-    }
+    addName();
   });
   $("btn-names-shuffle").addEventListener("click", () => {
     const n = Math.max(state.names.length, MIN_HOTSEAT) || 4;
@@ -725,6 +873,7 @@ function wire() {
   $("btn-names-start").addEventListener("click", () => {
     ensureAudio();
     if (state.names.length < MIN_HOTSEAT) return;
+    saveLastMode("hotseat");
     setupHotseat(state.names);
   });
 

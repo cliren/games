@@ -333,6 +333,10 @@ body.playing #app {
   min-height: 160px;
   border-radius: 12px;
   overflow: hidden;
+  margin-top: 14px;
+}
+.preview-arena[hidden] {
+  display: none !important;
 }
 
 .preview-arena[data-n="2"] {

@@ -24,7 +24,7 @@
       <header class="brand">
         <h2 class="display">Green Flash</h2>
         <p class="lede">Wait for green. Tap first. Don’t jump.</p>
-        <p class="caption meta-line">2–4 · ~5 min</p>
+        <p class="caption meta-line">2–4 together · hotseat 8 · ~5 min</p>
       </header>
       <div class="card stack">
         <button type="button" class="btn btn-primary btn-block" id="btn-play">Play</button>
@@ -34,8 +34,8 @@
     <!-- MODE -->
     <section id="screen-mode" class="screen">
       <header class="brand">
-        <h2 class="title">How to play</h2>
-        <p class="lede">Pick a mode</p>
+        <h2 class="title">Mode</h2>
+        <p class="lede">Versus split or pass-the-phone</p>
       </header>
       <div class="card stack">
         <button type="button" class="btn btn-primary btn-block mode-card" id="btn-mode-versus">
@@ -78,12 +78,10 @@
       </header>
       <div class="card">
         <div class="chips" id="name-chips" aria-live="polite"></div>
-        <label class="label" for="name-input">Add a name</label>
-        <div class="name-add">
-          <input type="text" id="name-input" maxlength="16" autocomplete="off" placeholder="e.g. Maya" />
-          <button type="button" class="btn" id="btn-add-name">Add</button>
+        <p class="hint">2–8 · prefilled · edit a chip or Shuffle</p>
+        <div class="name-add" style="margin-top:8px">
+          <button type="button" class="btn btn-block" id="btn-add-name">+ Add player</button>
         </div>
-        <p class="hint">2–8 names. Shuffle for fun stand-ins.</p>
         <div class="stack" style="margin-top:16px">
           <button type="button" class="btn btn-primary btn-block" id="btn-names-start" disabled>Start</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-names-shuffle">Shuffle names</button>
@@ -161,6 +159,11 @@
         </div>
       </div>
     </section>
+  </div>
+
+  <div id="play-rotate-gate" class="play-rotate-gate" hidden>
+    <p class="rotate-title">Rotate to landscape</p>
+    <p class="rotate-sub">3–4 players need a wider screen</p>
   </div>
 
   <div id="howto-overlay" class="sheet-overlay" hidden>

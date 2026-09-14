@@ -31,11 +31,11 @@
       </div>
     </section>
 
-    <!-- COUNT -->
+    <!-- COUNT + READY preview (merged — hub→Go ≤3 taps) -->
     <section id="screen-count" class="screen">
       <header class="brand">
         <h2 class="title">How many players?</h2>
-        <p class="lede caption">Each gets a colored zone</p>
+        <p class="lede caption">Each gets a colored zone. Hands ready.</p>
       </header>
       <div class="card">
         <div class="count-grid" role="group" aria-label="Player count">
@@ -44,24 +44,10 @@
           <button type="button" class="count-btn" data-count="4" aria-pressed="false">4</button>
         </div>
         <p class="hint" id="count-hint">3–4 need landscape</p>
+        <div class="preview-arena" id="preview-arena" aria-hidden="true" hidden></div>
         <div class="stack" style="margin-top:16px">
-          <button type="button" class="btn btn-primary btn-block" id="btn-count-next" disabled>Continue</button>
+          <button type="button" class="btn btn-primary btn-block" id="btn-count-go" disabled>Go</button>
           <button type="button" class="btn btn-ghost btn-block" id="btn-count-back">Back</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- READY -->
-    <section id="screen-ready" class="screen">
-      <header class="brand">
-        <h2 class="title">Grab your zone</h2>
-        <p class="lede caption">One corner each. Hands ready.</p>
-      </header>
-      <div class="card">
-        <div class="preview-arena" id="preview-arena" aria-hidden="true"></div>
-        <div class="stack" style="margin-top:16px">
-          <button type="button" class="btn btn-primary btn-block" id="btn-ready-go">Go</button>
-          <button type="button" class="btn btn-ghost btn-block" id="btn-ready-back">Back</button>
         </div>
       </div>
     </section>
@@ -106,9 +92,9 @@
         <button type="button" class="sheet-close" id="btn-howto-close" aria-label="Close">✕</button>
       </div>
       <ol class="howto-steps">
-        <li>Claim a zone</li>
-        <li>Tap moles in your color</li>
-        <li>Highest score wins</li>
+        <li>Claim a zone.</li>
+        <li>Tap moles in your color.</li>
+        <li>Highest score wins.</li>
       </ol>
       <button type="button" class="btn btn-primary btn-block" id="btn-howto-gotit">Got it</button>
     </div>

@@ -14,7 +14,7 @@
   --radius: 16px;
   --radius-sm: 10px;
 
-  /* Tile chrome = in-game --accent (Suren lock) */
+  /* Tile chrome = in-game --accent (Suren lock). Green Flash: --tile-green == game --accent #22C55E (flash stays same family). */
   --tile-coral: #F97066;
   --tile-coral-ink: #7F1D1D;
   --tile-teal: #2DD4BF;

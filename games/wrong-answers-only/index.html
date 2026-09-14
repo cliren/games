@@ -89,7 +89,7 @@
         <p class="hint">Tap to lock your vote</p>
         <div class="pick-list" id="vote-list" role="listbox" aria-label="Answers to vote"></div>
         <div class="sticky-cta">
-          <button type="button" class="btn btn-primary btn-block" id="btn-vote-done" disabled hidden>Lock vote</button>
+          <button type="button" class="btn btn-primary btn-block visually-hidden" id="btn-vote-done">Lock vote</button>
         </div>
       </div>
     </section>
@@ -97,6 +97,7 @@
     <section id="screen-podium" class="screen">
       <header class="brand">
         <h2 class="title">Results</h2>
+        <p class="lede caption" id="podium-sub"></p>
       </header>
       <div class="card">
         <p class="caption" id="podium-question" style="margin:0 0 12px;text-align:center"></p>

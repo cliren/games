@@ -9,8 +9,8 @@
   --cta: #111111;
   --cta-label: #FFFFFF;
   --focus: #1C1917;
-  --accent: #F43F5E;
-  --accent-ink: #881337;
+  --accent: #22C55E;
+  --accent-ink: #14532D;
   --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
   --flash: #22C55E;
   --flash-ink: #14532D;
@@ -33,8 +33,8 @@
     --cta: #FAFAFA;
     --cta-label: #0A0A0A;
     --focus: #FAFAFA;
-    --accent: #FB7185;
-    --accent-ink: #FFE4E6;
+    --accent: #16A34A;
+    --accent-ink: #DCFCE7;
     --accent-wash: color-mix(in srgb, var(--accent) 18%, transparent);
     --flash: #22C55E;
     --flash-ink: #DCFCE7;
@@ -866,6 +866,41 @@ input[type="text"] {
 }
 
 /* Hide topbar chrome feel during full arena? keep topbar always */
+body.playing-arena {
+  overscroll-behavior: none;
+  touch-action: none;
+}
 body.playing-arena .topbar {
-  /* keep accessible exit */
+  touch-action: manipulation;
+}
+
+
+/* Mid-play landscape gate (Corner Claim / Zone Whack parity) */
+.play-rotate-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  background: var(--paper);
+  text-align: center;
+}
+.play-rotate-gate[hidden] {
+  display: none !important;
+}
+.play-rotate-gate .rotate-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.play-rotate-gate .rotate-sub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-soft);
 }

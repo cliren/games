@@ -590,7 +590,7 @@ textarea {
   grid-column: 2;
   font-size: 12px;
   font-weight: 600;
-  color: var(--warn);
+  color: var(--accent-ink);
 }
 
 .board-tag.soft {

@@ -370,8 +370,14 @@ function renderWrapped() {
   $("wrapped-prompt").textContent = state.promptText;
 
   const { counts, magnets, radars, mutuals, max } = computeWrapped();
-  $("stat-magnet").textContent = magnets.join(", ");
-  $("stat-radar").textContent = radars.join(", ");
+  if (!magnets.length) {
+    $("stat-magnet").textContent = "Nobody this round";
+  } else if (magnets.length > 1 && max > 0) {
+    $("stat-magnet").textContent = "Tie · " + magnets.join(", ");
+  } else {
+    $("stat-magnet").textContent = magnets.join(", ");
+  }
+  $("stat-radar").textContent = radars.length ? radars.join(", ") : "Nobody this round";
   $("stat-mutuals").textContent =
     mutuals.length ? mutuals.join(" · ") : "None this round";
 
