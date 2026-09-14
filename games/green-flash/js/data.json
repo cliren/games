@@ -1,0 +1,12 @@
+{
+  "zoneColors": [
+    { "id": "p1", "label": "P1", "fill": "#F43F5E", "ink": "#FEF2F2" },
+    { "id": "p2", "label": "P2", "fill": "#3B82F6", "ink": "#EFF6FF" },
+    { "id": "p3", "label": "P3", "fill": "#F59E0B", "ink": "#FFFBEB" },
+    { "id": "p4", "label": "P4", "fill": "#A855F7", "ink": "#FAF5FF" }
+  ],
+  "versusBestOf": 5,
+  "hotseatTrials": 3,
+  "waitMinMs": 800,
+  "waitMaxMs": 3000
+}

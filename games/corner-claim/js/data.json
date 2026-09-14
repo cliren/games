@@ -1,0 +1,11 @@
+{
+  "roundSeconds": 10,
+  "countdownSeconds": 3,
+  "fillPerSecond": 10,
+  "zones": [
+    { "id": 0, "label": "P1", "color": "#EF4444", "ink": "#7F1D1D" },
+    { "id": 1, "label": "P2", "color": "#3B82F6", "ink": "#1E3A8A" },
+    { "id": 2, "label": "P3", "color": "#EAB308", "ink": "#713F12" },
+    { "id": 3, "label": "P4", "color": "#22C55E", "ink": "#14532D" }
+  ]
+}

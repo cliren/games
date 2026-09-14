@@ -23,6 +23,8 @@
   --tile-amber-ink: #78350F;
   --tile-indigo: #818CF8;
   --tile-indigo-ink: #312E81;
+  --tile-green: #22C55E;
+  --tile-green-ink: #14532D;
 
   --accent-pt: var(--tile-coral);
   --accent-blame: var(--tile-teal);
@@ -50,6 +52,8 @@
     --tile-amber-ink: #FFFBEB;
     --tile-indigo: #6366F1;
     --tile-indigo-ink: #EEF2FF;
+    --tile-green: #16A34A;
+    --tile-green-ink: #DCFCE7;
   }
 }
 
@@ -150,6 +154,7 @@ body {
 .tile--teal { border-left: 4px solid var(--tile-teal); }
 .tile--amber { border-left: 4px solid var(--tile-amber); }
 .tile--indigo { border-left: 4px solid var(--tile-indigo); }
+.tile--green { border-left: 4px solid var(--tile-green); }
 
 .tile-panel {
   display: flex;
@@ -175,6 +180,10 @@ body {
 .tile--indigo .tile-panel {
   background: var(--tile-indigo);
   color: var(--tile-indigo-ink);
+}
+.tile--green .tile-panel {
+  background: var(--tile-green);
+  color: var(--tile-green-ink);
 }
 
 .tile-glyph { width: 48px; height: 48px; display: block; }

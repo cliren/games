@@ -120,8 +120,8 @@ function showSetup() {
   showScreen("setup");
   $("#custom-prompt").value = "";
   $("#prompt-preview").textContent = randomPrompt();
-  $("#player-name").value = generateOneFunName();
-  selectCount(defaultPlayerCount());
+  $("#player-name").value = "";
+  selectCount(Math.max(2, defaultPlayerCount()));
 }
 
 function selectSoloTurns(n) {
@@ -150,9 +150,7 @@ function selectCount(n) {
     state.turns = soloTurns;
     selectSoloTurns(soloTurns);
     $("#count-hint").textContent = "Solo · " + soloTurns + " turns";
-    if (!$("#player-name").value.trim()) {
-      $("#player-name").value = generateOneFunName();
-    }
+    // Solo: leave blank or keep typed name — no silly roster force
   } else {
     soloWrap.hidden = true;
     if (soloName) soloName.hidden = true;
@@ -209,10 +207,7 @@ function renderRoster() {
 }
 
 function shuffleRosterNames() {
-  if (state.playerCount === 1) {
-    $("#player-name").value = generateOneFunName();
-    return;
-  }
+  if (state.playerCount === 1) return;
   const n = Math.max(2, Math.min(8, state.playerCount | 0));
   roster = generateFunNames(n);
   renderRoster();

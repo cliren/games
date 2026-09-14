@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#FFFBEB" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Category + fuse. Pass or boom." />
+  <title>Pass Bomb</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111111'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='28' fill='%23FBBF24'%3E!%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header class="topbar" role="banner">
+    <a class="topbar-back" href="../../">‹ Games</a>
+    <h1 class="topbar-title">Pass Bomb</h1>
+    <button type="button" class="topbar-help" id="btn-howto" aria-label="How to play">?</button>
+  </header>
+
+  <div id="app">
+    <!-- HOME -->
+    <section id="screen-home" class="screen">
+      <header class="brand">
+        <h2 class="display">Pass Bomb</h2>
+        <p class="lede">Category + fuse. Pass or boom.</p>
+      </header>
+      <div class="card stack">
+        <button type="button" class="btn btn-primary btn-block" id="btn-start">Play</button>
+        <button type="button" class="btn btn-ghost btn-block" id="btn-resume" hidden>Resume</button>
+      </div>
+      <p class="meta-line caption">2–8 · hotseat · ~10 min</p>
+    </section>
+
+    <!-- NAMES -->
+    <section id="screen-names" class="screen">
+      <header class="brand">
+        <h2 class="title">Who's playing?</h2>
+        <p class="lede caption" id="names-count">0 / 8</p>
+      </header>
+      <div class="card">
+        <div class="chips" id="name-chips" aria-live="polite"></div>
+        <label class="label" for="name-input">Add a name</label>
+        <div class="name-add">
+          <input type="text" id="name-input" maxlength="16" autocomplete="off" placeholder="e.g. Maya" />
+          <button type="button" class="btn" id="btn-add-name">Add</button>
+        </div>
+        <p class="hint">2–8 names. Shuffle for fun stand-ins.</p>
+        <div class="stack" style="margin-top:16px">
+          <button type="button" class="btn btn-primary btn-block" id="btn-names-start" disabled>Start</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-names-shuffle">Shuffle names</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-names-back">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAY: curtain + fuse act -->
+    <section id="screen-play" class="screen">
+      <div id="play-curtain" class="curtain" hidden>
+        <h2 class="title" id="pass-title">Pass to <strong>Maya</strong></h2>
+        <p class="lede" id="pass-sub">Don't peek.</p>
+        <button type="button" class="btn btn-primary" id="btn-im">I'm Maya</button>
+      </div>
+      <div id="play-act" hidden>
+        <div class="row spread">
+          <span class="pill" id="play-who">Maya</span>
+          <span class="caption" id="play-alive">4 left</span>
+        </div>
+        <p class="hint accent-hint">Name one out loud</p>
+        <div class="prompt-chip lg" id="play-category" aria-live="polite"></div>
+        <div class="fuse-wrap" aria-hidden="true">
+          <div class="fuse-track">
+            <div class="fuse-fill" id="fuse-fill"></div>
+          </div>
+          <div class="fuse-spark" id="fuse-spark"></div>
+        </div>
+        <p class="hint center" id="fuse-hint">Pass before it explodes</p>
+        <div class="sticky-cta">
+          <button type="button" class="btn btn-primary btn-block btn-pass" id="btn-pass">Pass</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOOM -->
+    <section id="screen-boom" class="screen">
+      <header class="brand">
+        <h2 class="display boom-title">Boom</h2>
+        <p class="lede" id="boom-who"><strong>Maya</strong> is out</p>
+      </header>
+      <div class="card stack">
+        <p class="caption" id="boom-alive">3 still in</p>
+        <button type="button" class="btn btn-primary btn-block" id="btn-boom-next">Next category</button>
+      </div>
+    </section>
+
+    <!-- RESULTS -->
+    <section id="screen-results" class="screen">
+      <header class="brand">
+        <h2 class="title">Results</h2>
+        <p class="lede caption" id="results-sub">Survivors</p>
+      </header>
+      <div class="card">
+        <ol class="board-list" id="results-list"></ol>
+        <div class="stack" style="margin-top:16px">
+          <button type="button" class="btn btn-primary btn-block" id="btn-another">Another round</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-new-game">New game</button>
+          <a class="btn btn-ghost btn-block" href="../../">All games</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="howto-overlay" class="sheet-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="howto-title" id="howto-sheet">
+      <div class="sheet-header">
+        <h2 class="title" id="howto-title">How to play</h2>
+        <button type="button" class="sheet-close" id="btn-howto-close" aria-label="Close">✕</button>
+      </div>
+      <ol class="howto-steps">
+        <li>Read the category.</li>
+        <li>Say an answer out loud.</li>
+        <li>Pass the phone — don't boom.</li>
+      </ol>
+      <button type="button" class="btn btn-primary btn-block" id="btn-howto-gotit">Got it</button>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

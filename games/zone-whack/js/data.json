@@ -1,0 +1,14 @@
+{
+  "roundMs": 25000,
+  "moleMinLifeMs": 900,
+  "moleMaxLifeMs": 1400,
+  "spawnMinMs": 450,
+  "spawnMaxMs": 850,
+  "maxMolesPerZone": 1,
+  "zones": [
+    { "id": 0, "label": "P1", "color": "#F97066", "ink": "#7F1D1D" },
+    { "id": 1, "label": "P2", "color": "#2DD4BF", "ink": "#115E59" },
+    { "id": 2, "label": "P3", "color": "#FBBF24", "ink": "#78350F" },
+    { "id": 3, "label": "P4", "color": "#60A5FA", "ink": "#1E3A8A" }
+  ]
+}

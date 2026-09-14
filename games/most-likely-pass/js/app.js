@@ -3,7 +3,7 @@
  */
 import { pickPrompt } from "./prompts.js";
 import { initHowto } from "./howto.js";
-import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
+import { generateFunNames, generateOneFunName, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const DRAFT_KEY = "most-likely-pass:draft:v1";
 const MAX_PLAYERS = 8;
@@ -143,6 +143,7 @@ function renderNames() {
     rm.setAttribute("aria-label", `Remove ${name}`);
     rm.textContent = "×";
     rm.addEventListener("click", () => {
+      if (state.names.length <= MIN_PLAYERS) return;
       state.names.splice(i, 1);
       renderNames();
     });
@@ -167,25 +168,12 @@ function renderNames() {
     go.disabled = false;
   }
   $("btn-add-name").disabled = n >= MAX_PLAYERS;
-  $("name-input").disabled = n >= MAX_PLAYERS;
 }
 
 function addName() {
-  const input = $("name-input");
-  const raw = (input.value || "").trim().replace(/\s+/g, " ");
-  if (!raw) return;
-  if (raw.length > 16) return;
-  const key = raw.toLowerCase();
-  if (state.names.some((n) => n.toLowerCase() === key)) {
-    input.value = "";
-    input.focus();
-    return;
-  }
   if (state.names.length >= MAX_PLAYERS) return;
-  state.names.push(raw);
-  input.value = "";
+  state.names.push(generateOneFunName(state.names));
   renderNames();
-  input.focus();
 }
 
 function shuffleNames() {
@@ -469,12 +457,6 @@ function init() {
   });
 
   $("btn-add-name").addEventListener("click", addName);
-  $("name-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addName();
-    }
-  });
 
   $("btn-names-back").addEventListener("click", () => renderHome());
   $("btn-names-shuffle").addEventListener("click", shuffleNames);

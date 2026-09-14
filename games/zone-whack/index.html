@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#EEF2FF" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="description" content="Moles in your zone. Hands off theirs." />
+  <title>Zone Whack</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111111'/%3E%3Ccircle cx='32' cy='32' r='14' fill='%23818CF8'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header class="topbar" role="banner" id="topbar">
+    <a class="topbar-back" href="../../">‹ Games</a>
+    <h1 class="topbar-title">Zone Whack</h1>
+    <button type="button" class="topbar-help" id="btn-howto" aria-label="How to play">?</button>
+  </header>
+
+  <div id="app">
+    <!-- HOME -->
+    <section id="screen-home" class="screen">
+      <header class="brand">
+        <h2 class="display">Zone Whack</h2>
+        <p class="lede">Moles pop in your zone. Whack yours — not theirs.</p>
+        <p class="caption meta-line">2–4 · ~3 min · simultaneous</p>
+      </header>
+      <div class="card stack">
+        <button type="button" class="btn btn-primary btn-block" id="btn-play">Play</button>
+      </div>
+    </section>
+
+    <!-- COUNT -->
+    <section id="screen-count" class="screen">
+      <header class="brand">
+        <h2 class="title">How many players?</h2>
+        <p class="lede caption">Each gets a colored zone</p>
+      </header>
+      <div class="card">
+        <div class="count-grid" role="group" aria-label="Player count">
+          <button type="button" class="count-btn" data-count="2" aria-pressed="false">2</button>
+          <button type="button" class="count-btn" data-count="3" aria-pressed="false">3</button>
+          <button type="button" class="count-btn" data-count="4" aria-pressed="false">4</button>
+        </div>
+        <p class="hint" id="count-hint">3–4 need landscape</p>
+        <div class="stack" style="margin-top:16px">
+          <button type="button" class="btn btn-primary btn-block" id="btn-count-next" disabled>Continue</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-count-back">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- READY -->
+    <section id="screen-ready" class="screen">
+      <header class="brand">
+        <h2 class="title">Grab your zone</h2>
+        <p class="lede caption">One corner each. Hands ready.</p>
+      </header>
+      <div class="card">
+        <div class="preview-arena" id="preview-arena" aria-hidden="true"></div>
+        <div class="stack" style="margin-top:16px">
+          <button type="button" class="btn btn-primary btn-block" id="btn-ready-go">Go</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-ready-back">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAY -->
+    <section id="screen-play" class="screen screen-play">
+      <div class="play-hud">
+        <span class="play-timer" id="play-timer" aria-live="polite">25</span>
+      </div>
+      <div class="arena" id="arena" touch-action="none"></div>
+      <div class="countdown-overlay" id="countdown-overlay" hidden>
+        <span class="countdown-num" id="countdown-num">3</span>
+      </div>
+    </section>
+
+    <!-- RESULTS -->
+    <section id="screen-results" class="screen">
+      <header class="brand">
+        <h2 class="title">Results</h2>
+        <p class="lede caption" id="results-sub">Highest score wins</p>
+      </header>
+      <div class="card">
+        <ol class="board-list" id="results-list"></ol>
+        <div class="stack" style="margin-top:16px">
+          <button type="button" class="btn btn-primary btn-block" id="btn-again">Play again</button>
+          <button type="button" class="btn btn-ghost btn-block" id="btn-new">Change players</button>
+          <a class="btn btn-ghost btn-block" href="../../">All games</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="rotate-gate" class="rotate-gate" hidden>
+    <p class="rotate-title">Rotate to landscape</p>
+    <p class="rotate-sub">3–4 players need a wider screen</p>
+  </div>
+
+  <div id="howto-overlay" class="sheet-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="howto-title" id="howto-sheet">
+      <div class="sheet-header">
+        <h2 class="title" id="howto-title">How to play</h2>
+        <button type="button" class="sheet-close" id="btn-howto-close" aria-label="Close">✕</button>
+      </div>
+      <ol class="howto-steps">
+        <li>Claim a zone</li>
+        <li>Tap moles in your color</li>
+        <li>Highest score wins</li>
+      </ol>
+      <button type="button" class="btn btn-primary btn-block" id="btn-howto-gotit">Got it</button>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

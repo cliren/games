@@ -1,6 +1,6 @@
 import { randomQuestion } from "./questions.js";
 import { initHowto } from "./howto.js";
-import { generateFunNames, defaultPlayerCount } from "../../shared/fun-names.js";
+import { generateFunNames, generateOneFunName, defaultPlayerCount } from "../../shared/fun-names.js";
 
 const DRAFT_KEY = "wrong-answers-only:draft:v1";
 const MIN_NAMES = 2;
@@ -170,7 +170,6 @@ function showNames(keepNames = false) {
   }
   saveDraft();
   showScreen("names");
-  $("#name-input").value = "";
   renderNameChips();
   updateStartEnabled();
 }
@@ -207,6 +206,7 @@ function renderNameChips() {
     rm.setAttribute("aria-label", `Remove ${name}`);
     rm.textContent = "×";
     rm.addEventListener("click", () => {
+      if (state.names.length <= MIN_NAMES) return;
       state.names.splice(i, 1);
       saveDraft();
       renderNameChips();
@@ -216,6 +216,8 @@ function renderNameChips() {
     wrap.appendChild(chip);
   });
   $("#names-count").textContent = `${state.names.length} / ${MAX_NAMES}`;
+  const addBtn = $("#btn-add-name");
+  if (addBtn) addBtn.disabled = state.names.length >= MAX_NAMES;
 }
 
 function updateStartEnabled() {
@@ -223,22 +225,11 @@ function updateStartEnabled() {
 }
 
 function addName() {
-  const input = $("#name-input");
-  let name = (input.value || "").trim().slice(0, NAME_MAX);
-  if (!name) return;
-  const lower = name.toLowerCase();
-  if (state.names.some((n) => n.toLowerCase() === lower)) {
-    input.value = "";
-    input.focus();
-    return;
-  }
   if (state.names.length >= MAX_NAMES) return;
-  state.names.push(name);
-  input.value = "";
+  state.names.push(generateOneFunName(state.names));
   saveDraft();
   renderNameChips();
   updateStartEnabled();
-  input.focus();
 }
 
 function shuffleNames() {
@@ -525,9 +516,6 @@ function init() {
   $("#btn-resume").addEventListener("click", resumeDraft);
 
   $("#btn-add-name").addEventListener("click", addName);
-  $("#name-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); addName(); }
-  });
   $("#btn-names-start").addEventListener("click", () => {
     if (state.names.length < MIN_NAMES) return;
     state.promptId = "";
