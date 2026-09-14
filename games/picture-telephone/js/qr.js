@@ -389,7 +389,7 @@ export function encodeQR(text) {
   return best;
 }
 
-export function qrToSvg(matrix, { cell = 4, dark = "#1a1025", light = "#fffef8" } = {}) {
+export function qrToSvg(matrix, { cell = 4, dark = "#1C1917", light = "#FFFFFF" } = {}) {
   if (!matrix) return "";
   const n = matrix.length;
   const q = 2;

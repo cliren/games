@@ -1,51 +1,69 @@
-# Picture Telephone
+# Games hub
 
-A **Telestrations-style** party game you can play in the browser: draw a prompt, pass it on, describe the drawing, draw the description, and laugh at the reveal.
+Static multi-game hub for pass-the-phone party games. No accounts, no server — state lives in the link (or a turn file).
 
-Pure static HTML/CSS/JS — **no build step**, no accounts, no server. Game state rides in the URL hash (or a small turn file).
+**Live:** [https://cliren.github.io/games/](https://cliren.github.io/games/)
 
-## How to play
+## Games
 
-### Pass-the-link (phones + laptops)
+| Game | Path | Players |
+|------|------|---------|
+| **Picture Telephone** | [`games/picture-telephone/`](./games/picture-telephone/) | 2–8 · ~15 min |
 
-1. One person opens the game and taps **Start a game**.
-2. Enter your name, pick player count (2–8), choose a random prompt or type your own.
-3. **Draw** the prompt, then tap **Done drawing**.
-4. On the pass screen, **Copy link** (or show the QR code) and send it to the next player.
-5. They open the link, enter their name, and **describe** the drawing (or **draw** the description — turns alternate).
-6. Keep passing until everyone has taken a turn, then step through the **Reveal**.
+Draw a prompt → pass the link → describe the drawing → draw the description → reveal the chain.
 
-### Hotseat (one device)
+### How to play Picture Telephone
 
-On the pass screen, tap **I’m next on this device**, enter the next player’s name, and continue. No link needed.
+**Pass-the-link:** Start a game → draw → **Copy link** → next player opens it → describe or draw → keep passing → **Reveal**.
 
-### Long drawings
+**Hotseat:** On the pass screen, **Same phone? Continue here** — no link needed.
 
-Stroke vectors keep most links short. If a drawing still makes the URL too long, **Download turn file** (`.pturn.json`) and share that file. The next player uses **Join with link or file** → import.
+**Long drawings:** Soft limit ~8KB / hard ~16KB of hash. If the link is too long, **Download turn file** and share that. Join via **Join with link or file**.
 
-### Refresh mid-turn
+**Refresh mid-turn:** Drafts save in `localStorage`. Use **Resume unfinished turn** on the game home.
 
-A local draft is saved in `localStorage` while you draw or describe. Use **Resume unfinished turn** on the home screen if you reload by accident.
+## Enable GitHub Pages
 
-## Host on GitHub Pages
+1. Push this repo to GitHub (`cliren/games` or your fork).
+2. **Settings → Pages**.
+3. **Build and deployment → Source:** Deploy from a branch.
+4. Branch: `main`, folder: `/` (root). **Save**.
+5. Open `https://<user>.github.io/<repo>/` — hub at `/`, Picture Telephone at `/games/picture-telephone/`.
 
-1. Create a new GitHub repository.
-2. Upload this folder’s contents (`index.html`, `css/`, `js/`, `README.md`) to the repo root — or keep them in a `docs/` folder / `gh-pages` branch.
-3. In the repo: **Settings → Pages**.
-4. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
-5. Choose the branch (usually `main`) and folder (`/` or `/docs`), then **Save**.
-6. After a minute, open `https://<user>.github.io/<repo>/` and play.
+Relative links are used throughout so the site works at a repo subpath (e.g. `/picture-telephone/`).
 
-You can also drop the folder on any static host (Netlify, Cloudflare Pages, nginx, etc.) or open `index.html` via a local static server.
+> Prefer a local static server for testing (`python -m http.server` from the repo root). `file://` may block ES modules.
 
-> **Note:** Opening `index.html` as a `file://` URL may block ES modules in some browsers. Prefer a tiny local server, e.g. `python -m http.server` from this directory.
+## Add a future game
 
-## Technical notes
+Folder pattern:
 
-- **State schema** version `1` — compressed into `#pt1.…` hashes.
-- Drawings are **stroke polylines** (normalized coordinates), not bitmaps, so links stay small.
-- QR codes are generated **locally in JS** (no external API).
-- System font stack only; no third-party CDNs.
+```
+games/
+  your-game-slug/
+    index.html
+    css/styles.css
+    js/…          # game logic
+```
+
+1. Create `games/<slug>/` with its own HTML/CSS/JS (no build step required).
+2. Add a card on the hub (`index.html`) pointing to `./games/<slug>/`.
+3. Reuse the how-to pattern: 3 verb steps, `localStorage` key `howto:<slug>:v1`, header `?` to reopen.
+4. Keep deep links shareable; each game owns its URL hash schema.
+5. Thin top bar: `‹ Games` → `../../` | title | `?`.
+
+Hub tokens live in `css/hub.css` (paper / ink / CTA). Games may copy the same tokens locally.
+
+## UX
+
+Locked decisions: [`docs/ux/debate-picture-telephone.md`](./docs/ux/debate-picture-telephone.md) (Decision section).
+
+## Tech notes
+
+- Schema `v1` → `#pt1.…` compressed hashes; stroke polylines (not bitmaps).
+- QR generated in-browser (lazy, behind **Show QR**).
+- System font stack only; zero CDNs / webfonts.
+- Canvas surface always `#FFFFFF`; DPR capped at 2.
 
 ## License
 
