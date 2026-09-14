@@ -24,7 +24,6 @@ let DATA = {
 const MIN_HOTSEAT = 2;
 const MAX_HOTSEAT = 8;
 const STUN_MS = 900;
-const STUN_MS = 900;
 const MODE_KEY = "gf:lastMode:v1";
 const VERSUS_COUNT_KEY = "gf:lastVersusCount:v1";
 
