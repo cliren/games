@@ -53,6 +53,7 @@ body {
   color: var(--ink);
   background: var(--paper);
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
 }
 
@@ -243,10 +244,12 @@ body.playing #app {
 }
 
 .btn {
+  -webkit-appearance: none;
   appearance: none;
   border: 1.5px solid var(--ink);
   background: var(--surface);
   color: var(--ink);
+  -webkit-text-fill-color: currentColor;
   font: inherit;
   font-weight: 600;
   font-size: 17px;
@@ -277,6 +280,7 @@ body.playing #app {
 .btn-primary {
   background: var(--cta);
   color: var(--cta-label);
+  -webkit-text-fill-color: var(--cta-label);
   border-color: var(--cta);
 }
 
@@ -285,6 +289,7 @@ body.playing #app {
   border-color: transparent;
   font-weight: 500;
   color: var(--ink-soft);
+  -webkit-text-fill-color: currentColor;
 }
 
 .btn-ghost:hover,

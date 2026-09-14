@@ -501,17 +501,25 @@ function showVersusResults() {
     .map((score, i) => ({ i, score, name: DATA.zoneColors[i].label, color: DATA.zoneColors[i].fill }))
     .sort((a, b) => b.score - a.score || a.i - b.i);
 
-  $("results-sub").textContent = `Best of ${state.bestOf}`;
+  const top = ranked[0]?.score ?? 0;
+  const winners = ranked.filter((r) => r.score === top && top > 0);
+  const tied = winners.length > 1;
+  const sub = $("results-sub");
+  if (top === 0) sub.textContent = `Nobody scored · best of ${state.bestOf}`;
+  else if (tied) sub.textContent = `Tie · ${winners.map((w) => w.name).join(" & ")}`;
+  else sub.textContent = `${winners[0].name} wins · best of ${state.bestOf}`;
+
   const list = $("podium-list");
   list.innerHTML = "";
   ranked.forEach((row, rank) => {
+    const isWin = row.score === top && top > 0;
     const li = document.createElement("li");
-    li.className = "podium-row" + (rank === 0 ? " gold" : "");
+    li.className = "podium-row" + (isWin ? " gold" : "");
     li.innerHTML = `
       <span class="podium-rank">${rank + 1}</span>
       <span class="podium-name">${escapeHtml(row.name)}</span>
       <span class="podium-stat">${row.score}</span>
-      ${rank === 0 ? '<span class="podium-tag">Winner</span>' : ""}
+      ${isWin ? `<span class="podium-tag">${tied ? "Tie" : "Winner"}</span>` : ""}
     `;
     list.appendChild(li);
   });
@@ -665,18 +673,26 @@ function showHotseatResults() {
       return a.best - b.best || a.i - b.i;
     });
 
-  $("results-sub").textContent = `Best of ${state.trials} trials · lowest ms`;
+  const bestMs = ranked.find((r) => r.best !== null)?.best ?? null;
+  const winners = ranked.filter((r) => r.best !== null && r.best === bestMs);
+  const tied = winners.length > 1;
+  const sub = $("results-sub");
+  if (bestMs === null) sub.textContent = `No legal taps · ${state.trials} trials`;
+  else if (tied) sub.textContent = `Tie · ${winners.map((w) => w.name).join(" & ")} · ${bestMs} ms`;
+  else sub.textContent = `${winners[0].name} fastest · ${bestMs} ms`;
+
   const list = $("podium-list");
   list.innerHTML = "";
   ranked.forEach((row, rank) => {
+    const isWin = row.best !== null && row.best === bestMs;
     const li = document.createElement("li");
-    li.className = "podium-row" + (rank === 0 && row.best !== null ? " gold" : "");
+    li.className = "podium-row" + (isWin ? " gold" : "");
     const stat = row.best === null ? "—" : `${row.best} ms`;
     li.innerHTML = `
       <span class="podium-rank">${rank + 1}</span>
       <span class="podium-name">${escapeHtml(row.name)}</span>
       <span class="podium-stat">${stat}</span>
-      ${rank === 0 && row.best !== null ? '<span class="podium-tag">Fastest</span>' : ""}
+      ${isWin ? `<span class="podium-tag">${tied ? "Tie" : "Fastest"}</span>` : ""}
     `;
     list.appendChild(li);
   });

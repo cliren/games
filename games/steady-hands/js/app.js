@@ -675,12 +675,20 @@ function showResults() {
   list.innerHTML = "";
   const ranked = [...state.scores].sort((a, b) => a.shake - b.shake);
   const best = ranked.length ? ranked[0].shake : 0;
+  const winners = ranked.filter((r) => r.shake === best);
+  const tied = winners.length > 1;
+  const sub = $("#results-sub");
+  if (sub) {
+    if (!ranked.length) sub.textContent = "Least shake wins";
+    else if (tied) sub.textContent = `Tie · ${winners.map((w) => w.name).join(" & ")}`;
+    else sub.textContent = `${winners[0].name} · steadiest`;
+  }
   ranked.forEach((row, i) => {
     const isBest = row.shake === best;
     const li = document.createElement("li");
     li.className = "board-row" + (isBest ? " board-main" : "");
     const tag = isBest
-      ? '<span class="board-tag">Steadiest</span>'
+      ? `<span class="board-tag">${tied ? "Tie" : "Steadiest"}</span>`
       : row.mode === "hold"
         ? '<span class="board-tag soft">Hold timer</span>'
         : "";

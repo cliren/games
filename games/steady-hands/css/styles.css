@@ -56,6 +56,7 @@ body {
   color: var(--ink);
   background: var(--paper);
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 .topbar {
@@ -264,10 +265,12 @@ textarea {
 }
 
 .btn {
+  -webkit-appearance: none;
   appearance: none;
   border: 1.5px solid var(--ink);
   background: var(--surface);
   color: var(--ink);
+  -webkit-text-fill-color: currentColor;
   font: inherit;
   font-weight: 600;
   font-size: 17px;
@@ -298,6 +301,7 @@ textarea {
 .btn-primary {
   background: var(--cta);
   color: var(--cta-label);
+  -webkit-text-fill-color: var(--cta-label);
   border-color: var(--cta);
 }
 
@@ -306,6 +310,7 @@ textarea {
   border-color: transparent;
   font-weight: 500;
   color: var(--ink-soft);
+  -webkit-text-fill-color: currentColor;
 }
 
 .btn-ghost:hover,
@@ -444,9 +449,10 @@ textarea {
 }
 
 .curtain .btn-primary {
-  background: var(--paper);
-  color: var(--ink);
-  border-color: var(--paper);
+  background: #FAF8F5;
+  color: #111111;
+  -webkit-text-fill-color: #111111;
+  border-color: #FAF8F5;
   margin-top: 16px;
   min-width: min(280px, 100%);
 }
@@ -455,11 +461,6 @@ textarea {
   .curtain {
     background: var(--ink);
     color: var(--paper);
-  }
-  .curtain .btn-primary {
-    background: var(--paper);
-    color: #0A0A0A;
-    border-color: var(--paper);
   }
 }
 
