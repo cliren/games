@@ -252,19 +252,24 @@ function goToPass() {
     startReveal();
     return;
   }
-  // Always stay in-app: Done → privacy curtain → I’m {name} / Next
+  // Always stay in-app: Done → privacy curtain → Pass to {name} / I’m {name}
   showCurtain();
 }
 
 function updateCurtainCta() {
   const btn = $("#btn-curtain-ready");
+  const title = $("#curtain-title");
+  const hint = $("#curtain-hint");
   if (!btn) return;
+  if (hint) hint.textContent = "Don’t peek.";
   if (isSolo(state)) {
-    btn.textContent = "Next";
+    if (title) title.textContent = "Look away, then Ready";
+    btn.textContent = "Ready";
     return;
   }
   const name = $("#curtain-name")?.value?.trim();
-  btn.textContent = name ? "I’m " + name : "Next";
+  if (title) title.textContent = name ? "Pass to " + name : "Pass the phone";
+  btn.textContent = name ? "I’m " + name : "I’m next";
 }
 
 function showCurtain() {
@@ -295,13 +300,9 @@ function showCurtain() {
   const nameWrap = $("#curtain-name-wrap");
 
   if (solo) {
-    $("#curtain-title").textContent = "Look away, then Next";
-    $("#curtain-hint").textContent = "Same phone · flip roles without peeking.";
     nameWrap.hidden = true;
     $("#curtain-name").value = state.promptAuthor || lastAuthorName() || "";
   } else {
-    $("#curtain-title").textContent = "Pass the phone";
-    $("#curtain-hint").textContent = "Hand it over. Next person taps below — no texts needed.";
     nameWrap.hidden = false;
     $("#curtain-name").value = "";
     $("#curtain-name").placeholder = "Your name";
@@ -672,7 +673,7 @@ function init() {
   // Describe
   $("#btn-describe-submit").addEventListener("click", submitDescription);
 
-  // Curtain handoff (hotseat-first). Copy/download only under “Another phone?”
+  // Curtain handoff (hotseat-first). Copy/download only under Advanced details.
   $("#btn-curtain-ready").addEventListener("click", beginCurtainReady);
   $("#curtain-name").addEventListener("input", updateCurtainCta);
   $("#curtain-name").addEventListener("keydown", (e) => {

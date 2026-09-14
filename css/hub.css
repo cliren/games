@@ -14,15 +14,15 @@
   --radius: 16px;
   --radius-sm: 10px;
 
-  /* Tile chrome only (not page washes) */
-  --tile-coral: #F97066;
-  --tile-coral-ink: #7F1D1D;
-  --tile-teal: #2DD4BF;
-  --tile-teal-ink: #115E59;
-  --tile-amber: #FBBF24;
-  --tile-amber-ink: #78350F;
-  --tile-indigo: #818CF8;
-  --tile-indigo-ink: #312E81;
+  /* Saturated tile panels (chrome only — not page washes) */
+  --tile-coral: #FF3D2E;
+  --tile-coral-ink: #2A0604;
+  --tile-teal: #00C2A0;
+  --tile-teal-ink: #03241E;
+  --tile-amber: #FFB000;
+  --tile-amber-ink: #2A1A00;
+  --tile-indigo: #3D4CFF;
+  --tile-indigo-ink: #0A0C3D;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,14 +37,14 @@
     --cta-label: #0A0A0A;
     --focus: #FAFAFA;
 
-    --tile-coral: #E35D5B;
-    --tile-coral-ink: #FEF2F2;
-    --tile-teal: #14B8A6;
-    --tile-teal-ink: #ECFDF5;
-    --tile-amber: #F59E0B;
-    --tile-amber-ink: #FFFBEB;
-    --tile-indigo: #6366F1;
-    --tile-indigo-ink: #EEF2FF;
+    --tile-coral: #FF4B3C;
+    --tile-coral-ink: #1A0302;
+    --tile-teal: #00D4B0;
+    --tile-teal-ink: #021C18;
+    --tile-amber: #FFC107;
+    --tile-amber-ink: #1A1200;
+    --tile-indigo: #4F5DFF;
+    --tile-indigo-ink: #07082A;
   }
 }
 
@@ -116,7 +116,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 220px;
+  min-height: 260px;
   background: var(--surface);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
@@ -128,7 +128,7 @@ body {
 }
 
 .tile--playable {
-  border-color: var(--ink);
+  border: 2px solid var(--ink);
   cursor: pointer;
   transition: opacity 80ms;
 }
@@ -152,8 +152,9 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  height: 88px;
-  color: inherit;
+  min-height: 110px;
+  height: 110px;
+  color: var(--ink);
 }
 
 .tile--coral .tile-panel {
@@ -177,9 +178,28 @@ body {
 }
 
 .tile-glyph {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   display: block;
+  color: inherit;
+  overflow: visible;
+}
+
+.tile-glyph [stroke] {
+  stroke: currentColor;
+  stroke-width: 3.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tile-glyph [fill]:not([fill="none"]) {
+  fill: currentColor;
+}
+
+.tile-glyph .glyph-knockout {
+  stroke: var(--paper);
+  fill: none;
+  stroke-width: 3;
 }
 
 .tile-body {
@@ -239,11 +259,11 @@ body {
   min-height: 44px;
   padding: 10px 16px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--cta-label);
-  background: var(--cta);
-  border-radius: var(--radius-sm);
+  color: #FFFFFF;
+  background: #111111;
+  border-radius: 999px;
   text-align: center;
 }
 
@@ -273,16 +293,17 @@ body {
   }
 
   .tile {
-    min-height: 240px;
+    min-height: 280px;
   }
 
   .tile-panel {
-    height: 100px;
+    min-height: 124px;
+    height: 124px;
   }
 
   .tile-glyph {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
   }
 
   .tile-body {

@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#FAF8F5" />
-  <meta name="description" content="Draw. Pass. Describe. Ruin it together." />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#FAF8F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Draw. Pass in the app. Ruin it together." />
   <title>Picture Telephone</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111111'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='28' fill='%23FAF8F5'%3E%E2%9C%8E%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="./css/styles.css" />
@@ -21,7 +23,7 @@
     <section id="screen-home" class="screen">
       <header class="brand">
         <h2 class="display">Picture Telephone</h2>
-        <p class="lede">Draw. Pass. Describe. Ruin it together.</p>
+        <p class="lede">Draw. Pass in the app. Ruin it together.</p>
       </header>
       <div class="card stack">
         <button type="button" class="btn btn-primary btn-block" id="btn-start">Start a game</button>
@@ -160,20 +162,20 @@
       <div class="curtain card">
         <p class="caption" id="curtain-progress">Turn 2 of 5</p>
         <h2 class="title" id="curtain-title">Pass the phone</h2>
-        <p class="lede" id="curtain-hint">Hand it over so the next person doesn’t peek.</p>
+        <p class="lede" id="curtain-hint">Don’t peek.</p>
         <div id="curtain-name-wrap">
           <label class="label" for="curtain-name">Who’s up?</label>
           <input type="text" id="curtain-name" maxlength="24" autocomplete="nickname" placeholder="Your name" />
         </div>
         <div class="stack" style="margin-top:20px">
-          <button type="button" class="btn btn-primary btn-block btn-done" id="btn-curtain-ready">Next</button>
+          <button type="button" class="btn btn-primary btn-block btn-done" id="btn-curtain-ready">I’m next</button>
         </div>
         <p class="hint" id="pass-soft-hint" hidden>Drawing is large — stay on this phone.</p>
         <div class="alert" id="pass-toolong" hidden>
           Drawing is too large to share as a link. Stay on this phone, or use the fallback below.
         </div>
         <details class="trouble-disclosure" id="trouble-disclosure">
-          <summary>Another phone? (rare)</summary>
+          <summary>Advanced details</summary>
           <div class="trouble-body">
             <button type="button" class="btn btn-ghost btn-block" id="btn-copy-link">Copy link</button>
             <div id="pass-link-block" hidden>
@@ -224,7 +226,7 @@
       </div>
       <ol class="howto-steps">
         <li>Someone draws a prompt.</li>
-        <li>Pass the phone — or keep going solo.</li>
+        <li>Pass the phone. Next person draws or describes.</li>
         <li>Reveal the chain together.</li>
       </ol>
       <button type="button" class="btn btn-primary btn-block" id="btn-howto-gotit">Got it</button>
