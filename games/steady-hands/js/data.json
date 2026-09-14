@@ -1,0 +1,11 @@
+{
+  "measureMs": 5000,
+  "calibrateMs": 400,
+  "motionWaitMs": 700,
+  "hook": "Palm. Still. Lowest shake wins.",
+  "howto": [
+    "Rest the phone on your palm.",
+    "Hold still for 5s — allow motion if asked.",
+    "Lowest shake wins."
+  ]
+}

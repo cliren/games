@@ -25,11 +25,14 @@
   --tile-indigo-ink: #312E81;
   --tile-green: #22C55E;
   --tile-green-ink: #14532D;
+  --tile-sky: #38BDF8;
+  --tile-sky-ink: #0C4A6E;
 
   --accent-pt: var(--tile-coral);
   --accent-blame: var(--tile-teal);
   --accent-wao: var(--tile-amber);
   --accent-mlp: var(--tile-indigo);
+  --accent-steady: var(--tile-sky);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -54,6 +57,8 @@
     --tile-indigo-ink: #EEF2FF;
     --tile-green: #16A34A;
     --tile-green-ink: #DCFCE7;
+    --tile-sky: #38BDF8;
+    --tile-sky-ink: #082F49;
   }
 }
 
@@ -155,6 +160,7 @@ body {
 .tile--amber { border-left: 4px solid var(--tile-amber); }
 .tile--indigo { border-left: 4px solid var(--tile-indigo); }
 .tile--green { border-left: 4px solid var(--tile-green); }
+.tile--sky { border-left: 4px solid var(--tile-sky); }
 
 .tile-panel {
   display: flex;
@@ -184,6 +190,10 @@ body {
 .tile--green .tile-panel {
   background: var(--tile-green);
   color: var(--tile-green-ink);
+}
+.tile--sky .tile-panel {
+  background: var(--tile-sky);
+  color: var(--tile-sky-ink);
 }
 
 .tile-glyph { width: 48px; height: 48px; display: block; }

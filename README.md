@@ -1,6 +1,6 @@
 # Games hub
 
-Static multi-game hub for pass-the-phone party games. No accounts, no server — state lives in the link (or a turn file).
+Static multi-game hub for same-phone party games. One phone. Pass in the app. No accounts, no server.
 
 **Live:** [https://cliren.github.io/games/](https://cliren.github.io/games/)
 
@@ -8,17 +8,39 @@ Static multi-game hub for pass-the-phone party games. No accounts, no server —
 
 | Game | Path | Players |
 |------|------|---------|
-| **Picture Telephone** | [`games/picture-telephone/`](./games/picture-telephone/) | 2–8 · ~15 min |
+| **Picture Telephone** | [`games/picture-telephone/`](./games/picture-telephone/) | 1–8 · ~15 min |
+| **Most Likely Pass** | [`games/most-likely-pass/`](./games/most-likely-pass/) | 2–8 · ~10 min |
+| **Blame Chain** | [`games/blame-chain/`](./games/blame-chain/) | 2–8 · ~8 min |
+| **Green Flash** | [`games/green-flash/`](./games/green-flash/) | 2–4 · ~5 min |
+| **Corner Claim** | [`games/corner-claim/`](./games/corner-claim/) | 2–4 · ~3 min |
+| **Pass Bomb** | [`games/pass-bomb/`](./games/pass-bomb/) | 2–8 · ~10 min |
+| **Zone Whack** | [`games/zone-whack/`](./games/zone-whack/) | 2–4 · ~3 min |
+| **Steady Hands** | [`games/steady-hands/`](./games/steady-hands/) | 2–8 · ~5 min |
+| **Wrong Answers Only** | [`games/wrong-answers-only/`](./games/wrong-answers-only/) | 2–8 · ~8 min |
 
-Draw a prompt → pass the link → describe the drawing → draw the description → reveal the chain.
+**Picture Telephone:** Draw a prompt → pass the phone → describe the drawing → draw the description → reveal the chain.
+
+**Most Likely Pass** — Prompt → pick who fits (not self) → pass phone → reveal who picked whom + Wrapped (Phone Magnet, Under the Radar, Mutuals). Hotseat only.
+
+**Blame Chain:** Chaos prompt → hotseat blame + alibi → reveal carousel → blame board.
+
+**Green Flash:** Wait for green → tap first (versus split or hotseat). False-start hurts. Best of 5 podium.
+
+**Corner Claim:** Split-screen hold-to-paint. Claim a corner, fill the most in 10 seconds.
+
+**Pass Bomb:** Category card + ticking fuse. Say one out loud, tap **Pass**, don’t boom. Last standing wins.
+
+**Zone Whack:** Split the screen. Moles spawn in colored zones — whack only yours. Highest score wins.
+
+**Steady Hands:** Rest the phone on your palm. Hold still 5s. Lowest DeviceMotion shake wins. Motion permission on Start; hold-still tap timer if denied.
 
 ### How to play Picture Telephone
 
-**Pass-the-link:** Start a game → draw → **Copy link** → next player opens it → describe or draw → keep passing → **Reveal**.
+**Same phone:** Start → draw/describe → **Done** → privacy curtain → **Pass to {name}** / **I’m {name}**. Handoff stays in the app.
 
-**Hotseat:** On the pass screen, **Same phone? Continue here** — no link needed.
+**Solo:** Pick **1** player (default 4 turns). Same person every turn; curtain says look away, then **Next** (auto role flip).
 
-**Long drawings:** Soft limit ~8KB / hard ~16KB of hash. If the link is too long, **Download turn file** and share that. Join via **Join with link or file**.
+**Advanced details (rare):** Copy link, turn file, or QR live under **Advanced details** on the curtain. Soft ~8KB / hard ~16KB hash. Same-phone play never needs a download. Join via **Join with link or file**.
 
 **Refresh mid-turn:** Drafts save in `localStorage`. Use **Resume unfinished turn** on the game home.
 
@@ -49,7 +71,7 @@ games/
 1. Create `games/<slug>/` with its own HTML/CSS/JS (no build step required).
 2. Add a card on the hub (`index.html`) pointing to `./games/<slug>/`.
 3. Reuse the how-to pattern: 3 verb steps, `localStorage` key `howto:<slug>:v1`, header `?` to reopen.
-4. Keep deep links shareable; each game owns its URL hash schema.
+4. Handoff is in-app curtains (`Pass to {name}` / `I’m {name}`). Deep links are optional/advanced.
 5. Thin top bar: `‹ Games` → `../../` | title | `?`.
 
 Hub tokens live in `css/hub.css` (paper / ink / CTA). Games may copy the same tokens locally.
