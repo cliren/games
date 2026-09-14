@@ -1,0 +1,537 @@
+import { randomPrompt } from "./prompts.js";
+import { initHowto } from "./howto.js";
+
+const DRAFT_KEY = "blame-chain:draft:v1";
+const MIN_NAMES = 3;
+const MAX_NAMES = 8;
+const NAME_MAX = 16;
+const ALIBI_MAX = 80;
+
+/** @typedef {{
+ *  v: 1,
+ *  names: string[],
+ *  promptId: string,
+ *  promptText: string,
+ *  turnIndex: number,
+ *  pendingBlamed: string,
+ *  entries: Array<{ from: string, blamed: string, alibi: string }>,
+ *  phase: "home"|"names"|"prompt"|"pass"|"blame"|"alibi"|"reveal"|"board",
+ *  revealIndex: number,
+ *  shuffledOnce: boolean,
+ * }} BlameGame */
+
+/** @type {BlameGame} */
+let state = emptyState();
+/** @type {ReturnType<typeof initHowto> | null} */
+let howto = null;
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => [...document.querySelectorAll(sel)];
+
+function emptyState() {
+  return {
+    v: 1,
+    names: [],
+    promptId: "",
+    promptText: "",
+    turnIndex: 0,
+    pendingBlamed: "",
+    entries: [],
+    phase: "home",
+    revealIndex: 0,
+    shuffledOnce: false,
+  };
+}
+
+function saveDraft() {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || d.v !== 1 || !Array.isArray(d.names)) return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function showScreen(id) {
+  $$(".screen").forEach((el) => el.classList.remove("active"));
+  // Unmount private turn content when leaving blame/alibi
+  if (id === "pass" || id === "home" || id === "names" || id === "prompt") {
+    clearPrivateTurnDom();
+  }
+  const screen = document.getElementById("screen-" + id);
+  if (screen) screen.classList.add("active");
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function clearPrivateTurnDom() {
+  const list = $("#blame-list");
+  if (list) list.innerHTML = "";
+  const alibi = $("#alibi-input");
+  if (alibi) alibi.value = "";
+  const hint = $("#blame-hint");
+  if (hint) hint.textContent = "Tap who did it";
+}
+
+function currentName() {
+  return state.names[state.turnIndex] || "";
+}
+
+/* ---------- Home ---------- */
+function showHome() {
+  state.phase = "home";
+  showScreen("home");
+  const draft = loadDraft();
+  const resume = $("#btn-resume");
+  const resumable =
+    draft &&
+    Array.isArray(draft.names) &&
+    draft.names.length >= MIN_NAMES &&
+    draft.phase &&
+    draft.phase !== "home" &&
+    draft.phase !== "board";
+  resume.hidden = !resumable;
+  // Only one primary: Start. Resume is ghost.
+}
+
+function resumeDraft() {
+  const draft = loadDraft();
+  if (!draft) return;
+  state = { ...emptyState(), ...draft, v: 1 };
+  routeFromPhase();
+}
+
+function routeFromPhase() {
+  switch (state.phase) {
+    case "names":
+      showNames();
+      break;
+    case "prompt":
+      showPrompt();
+      break;
+    case "pass":
+      showPass();
+      break;
+    case "blame":
+      showBlame();
+      break;
+    case "alibi":
+      // Privacy: never resume mid-alibi showing prior pick on shared phone — go to pass for that turn
+      state.pendingBlamed = "";
+      state.phase = "pass";
+      saveDraft();
+      showPass();
+      break;
+    case "reveal":
+      showReveal();
+      break;
+    case "board":
+      showBoard();
+      break;
+    default:
+      showHome();
+  }
+}
+
+/* ---------- Names ---------- */
+function showNames(keepNames = false) {
+  if (!keepNames) {
+    state = emptyState();
+    state.phase = "names";
+  } else {
+    state.phase = "names";
+  }
+  saveDraft();
+  showScreen("names");
+  $("#name-input").value = "";
+  renderNameChips();
+  updateStartEnabled();
+}
+
+function renderNameChips() {
+  const wrap = $("#name-chips");
+  wrap.innerHTML = "";
+  state.names.forEach((name, i) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.setAttribute("aria-label", `Remove ${name}`);
+    chip.innerHTML = `<span>${escapeHtml(name)}</span><span class="chip-x" aria-hidden="true">×</span>`;
+    chip.addEventListener("click", () => {
+      state.names.splice(i, 1);
+      saveDraft();
+      renderNameChips();
+      updateStartEnabled();
+    });
+    wrap.appendChild(chip);
+  });
+  $("#names-count").textContent = `${state.names.length} / ${MAX_NAMES}`;
+}
+
+function updateStartEnabled() {
+  const btn = $("#btn-names-start");
+  btn.disabled = state.names.length < MIN_NAMES;
+}
+
+function addName() {
+  const input = $("#name-input");
+  let name = (input.value || "").trim().slice(0, NAME_MAX);
+  if (!name) return;
+  const lower = name.toLowerCase();
+  if (state.names.some((n) => n.toLowerCase() === lower)) {
+    input.value = "";
+    input.focus();
+    return;
+  }
+  if (state.names.length >= MAX_NAMES) return;
+  state.names.push(name);
+  input.value = "";
+  saveDraft();
+  renderNameChips();
+  updateStartEnabled();
+  input.focus();
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/* ---------- Prompt ---------- */
+function showPrompt() {
+  state.phase = "prompt";
+  if (!state.promptText) {
+    const p = randomPrompt();
+    state.promptId = p.id;
+    state.promptText = p.text;
+    state.shuffledOnce = false;
+  }
+  saveDraft();
+  showScreen("prompt");
+  $("#prompt-text").textContent = state.promptText;
+  const shuffle = $("#btn-shuffle");
+  shuffle.hidden = state.shuffledOnce;
+}
+
+function shufflePrompt() {
+  if (state.shuffledOnce) return;
+  const p = randomPrompt();
+  state.promptId = p.id;
+  state.promptText = p.text;
+  state.shuffledOnce = true;
+  saveDraft();
+  $("#prompt-text").textContent = state.promptText;
+  $("#btn-shuffle").hidden = true;
+}
+
+function startRoundFromPrompt() {
+  state.turnIndex = 0;
+  state.entries = [];
+  state.pendingBlamed = "";
+  state.revealIndex = 0;
+  state.phase = "pass";
+  saveDraft();
+  showPass();
+}
+
+/* ---------- Pass curtain ---------- */
+function showPass() {
+  state.phase = "pass";
+  state.pendingBlamed = "";
+  saveDraft();
+  clearPrivateTurnDom();
+  showScreen("pass");
+  const name = currentName();
+  $("#pass-title").innerHTML = `Pass to <strong>${escapeHtml(name)}</strong>`;
+  $("#pass-sub").textContent = "Don't peek.";
+  $("#btn-im").textContent = `I'm ${name}`;
+}
+
+/* ---------- Blame ---------- */
+function showBlame() {
+  state.phase = "blame";
+  saveDraft();
+  showScreen("blame");
+  $("#blame-prompt").textContent = state.promptText;
+  $("#blame-who").textContent = currentName();
+  $("#blame-progress").textContent = `${state.turnIndex + 1} / ${state.names.length}`;
+  const list = $("#blame-list");
+  list.innerHTML = "";
+  const me = currentName();
+  state.names.forEach((name) => {
+    if (name === me) return; // no self-blame
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pick-row" + (state.pendingBlamed === name ? " selected" : "");
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      state.pendingBlamed = name;
+      $$("#blame-list .pick-row").forEach((el) =>
+        el.classList.toggle("selected", el.textContent === name)
+      );
+      $("#btn-blame-done").disabled = false;
+      $("#blame-hint").textContent = `Blaming ${name}`;
+    });
+    list.appendChild(btn);
+  });
+  const has = !!state.pendingBlamed;
+  $("#btn-blame-done").disabled = !has;
+  $("#blame-hint").textContent = has ? `Blaming ${state.pendingBlamed}` : "Tap who did it";
+}
+
+function commitBlame() {
+  if (!state.pendingBlamed) return;
+  state.phase = "alibi";
+  saveDraft();
+  showAlibi();
+}
+
+/* ---------- Alibi ---------- */
+function showAlibi() {
+  state.phase = "alibi";
+  saveDraft();
+  showScreen("alibi");
+  $("#alibi-prompt").textContent = state.promptText;
+  $("#alibi-blamed").textContent = state.pendingBlamed;
+  const input = $("#alibi-input");
+  input.value = "";
+  input.focus();
+  updateAlibiDone();
+}
+
+function updateAlibiDone() {
+  const v = ($("#alibi-input").value || "").trim();
+  $("#btn-alibi-done").disabled = v.length < 1;
+  const n = ($("#alibi-input").value || "").length;
+  $("#alibi-count").textContent = `${n}/${ALIBI_MAX}`;
+}
+
+function commitAlibi() {
+  const alibi = ($("#alibi-input").value || "").trim().slice(0, ALIBI_MAX);
+  if (!alibi || !state.pendingBlamed) return;
+  state.entries.push({
+    from: currentName(),
+    blamed: state.pendingBlamed,
+    alibi,
+  });
+  state.pendingBlamed = "";
+  clearPrivateTurnDom();
+  if (state.turnIndex + 1 >= state.names.length) {
+    state.phase = "reveal";
+    state.revealIndex = 0;
+    saveDraft();
+    showReveal();
+  } else {
+    state.turnIndex += 1;
+    state.phase = "pass";
+    saveDraft();
+    showPass();
+  }
+}
+
+/* ---------- Reveal ---------- */
+function showReveal() {
+  state.phase = "reveal";
+  saveDraft();
+  showScreen("reveal");
+  renderRevealStep();
+}
+
+function renderRevealStep() {
+  const i = state.revealIndex;
+  const total = state.entries.length;
+  $("#reveal-counter").textContent = `${i + 1} / ${total}`;
+  const entry = state.entries[i];
+  const body = $("#reveal-body");
+  body.innerHTML = "";
+  if (!entry) return;
+
+  const card = document.createElement("div");
+  card.className = "reveal-step";
+  card.innerHTML = `
+    <p class="reveal-arrow">${escapeHtml(entry.from)} → <strong>${escapeHtml(entry.blamed)}</strong></p>
+    <p class="reveal-alibi">"${escapeHtml(entry.alibi)}"</p>
+  `;
+  body.appendChild(card);
+
+  const atEnd = i >= total - 1;
+  $("#btn-reveal-next").textContent = atEnd ? "Blame board" : "Next";
+  $("#btn-reveal-prev").disabled = i === 0;
+  $("#btn-show-all").hidden = !(atEnd && total > 1);
+}
+
+function revealNext() {
+  if (state.revealIndex >= state.entries.length - 1) {
+    showBoard();
+    return;
+  }
+  state.revealIndex += 1;
+  saveDraft();
+  renderRevealStep();
+}
+
+function revealPrev() {
+  if (state.revealIndex <= 0) return;
+  state.revealIndex -= 1;
+  saveDraft();
+  renderRevealStep();
+}
+
+function showAllAccusations() {
+  const body = $("#reveal-body");
+  body.innerHTML = "";
+  state.entries.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "reveal-step reveal-compact";
+    row.innerHTML = `
+      <p class="reveal-arrow">${escapeHtml(entry.from)} → <strong>${escapeHtml(entry.blamed)}</strong></p>
+      <p class="reveal-alibi">"${escapeHtml(entry.alibi)}"</p>
+    `;
+    body.appendChild(row);
+  });
+  $("#reveal-counter").textContent = `All · ${state.entries.length}`;
+  $("#btn-reveal-next").textContent = "Blame board";
+  $("#btn-show-all").hidden = true;
+}
+
+/* ---------- Board ---------- */
+function showBoard() {
+  state.phase = "board";
+  clearDraft();
+  showScreen("board");
+  const counts = {};
+  state.names.forEach((n) => {
+    counts[n] = 0;
+  });
+  state.entries.forEach((e) => {
+    if (counts[e.blamed] != null) counts[e.blamed] += 1;
+  });
+  const ranked = state.names
+    .map((name) => ({ name, count: counts[name] || 0 }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  const topCount = ranked[0] ? ranked[0].count : 0;
+  const list = $("#board-list");
+  list.innerHTML = "";
+  let lastCount = null;
+  let rank = 0;
+  ranked.forEach((row, idx) => {
+    if (row.count !== lastCount) {
+      rank = idx + 1;
+      lastCount = row.count;
+    }
+    const isMain = row.count === topCount && topCount > 0;
+    const li = document.createElement("li");
+    li.className = "board-row" + (isMain ? " board-main" : "");
+    const label =
+      isMain
+        ? '<span class="board-tag">Main suspect</span>'
+        : row.count === 0
+          ? '<span class="board-tag soft">Somehow innocent</span>'
+          : "";
+    li.innerHTML = `
+      <span class="board-rank">${rank}</span>
+      <span class="board-name">${escapeHtml(row.name)}</span>
+      <span class="board-count">${row.count}</span>
+      ${label}
+    `;
+    list.appendChild(li);
+  });
+}
+
+function anotherRound() {
+  const names = [...state.names];
+  state = emptyState();
+  state.names = names;
+  state.phase = "prompt";
+  const p = randomPrompt();
+  state.promptId = p.id;
+  state.promptText = p.text;
+  state.shuffledOnce = false;
+  saveDraft();
+  showPrompt();
+}
+
+function newGame() {
+  clearDraft();
+  state = emptyState();
+  showNames(false);
+}
+
+/* ---------- Wire ---------- */
+function init() {
+  howto = initHowto({
+    overlay: $("#howto-overlay"),
+    sheet: $("#howto-sheet"),
+    gotItBtn: $("#btn-howto-gotit"),
+    closeBtn: $("#btn-howto-close"),
+    openBtn: $("#btn-howto"),
+  });
+
+  $("#btn-start").addEventListener("click", () => showNames(false));
+  $("#btn-resume").addEventListener("click", resumeDraft);
+
+  $("#btn-add-name").addEventListener("click", addName);
+  $("#name-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addName();
+    }
+  });
+  $("#btn-names-start").addEventListener("click", () => {
+    if (state.names.length < MIN_NAMES) return;
+    state.promptId = "";
+    state.promptText = "";
+    state.shuffledOnce = false;
+    showPrompt();
+  });
+  $("#btn-names-back").addEventListener("click", () => {
+    clearDraft();
+    showHome();
+  });
+
+  $("#btn-shuffle").addEventListener("click", shufflePrompt);
+  $("#btn-prompt-go").addEventListener("click", startRoundFromPrompt);
+
+  $("#btn-im").addEventListener("click", () => {
+    state.pendingBlamed = "";
+    showBlame();
+  });
+
+  $("#btn-blame-done").addEventListener("click", commitBlame);
+  $("#btn-alibi-done").addEventListener("click", commitAlibi);
+  $("#alibi-input").addEventListener("input", updateAlibiDone);
+
+  $("#btn-reveal-next").addEventListener("click", revealNext);
+  $("#btn-reveal-prev").addEventListener("click", revealPrev);
+  $("#btn-show-all").addEventListener("click", showAllAccusations);
+
+  $("#btn-another").addEventListener("click", anotherRound);
+  $("#btn-new-game").addEventListener("click", newGame);
+
+  showHome();
+  howto.maybeAutoShow();
+}
+
+init();
