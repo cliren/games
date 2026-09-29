@@ -1,6 +1,5 @@
 (() => {
   const STORAGE_KEY = "myMusic.v1";
-  const GATE_KEY = "myMusic.gate.v1";
   const RECENT_MAX = 30;
   const CAT_LABELS = { bhakti: "Bhakti", folk: "Folk", other: "Other" };
 
@@ -96,41 +95,20 @@
     "pl_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 
-  // Client-side unlock check (obscurity only — not cryptography; static Pages host).
-  const ptYearMonth = () => {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "2-digit",
-    }).formatToParts(new Date());
-    const year = parts.find((part) => part.type === "year")?.value || "";
-    const month = parts.find((part) => part.type === "month")?.value || "";
-    return year + month;
-  };
-
-  const expectedUnlock = () => "Hyd" + ptYearMonth();
-
-  const isGateUnlocked = () => {
-    try {
-      const raw = localStorage.getItem(GATE_KEY);
-      if (!raw) return false;
-      const data = JSON.parse(raw);
-      return !!(data && data.unlocked === true);
-    } catch (_) {
-      return false;
-    }
-  };
-
-  const persistGateUnlock = () => {
-    try {
-      localStorage.setItem(GATE_KEY, JSON.stringify({ unlocked: true, yearMonth: ptYearMonth() }));
-    } catch (_) { /* quota */ }
-  };
+  // Unlock = Drive API key stored in localStorage (myMusic.driveApiKey).
+  // Legacy Hyd+YYYYMM gate key is cleared if present.
+  try {
+    localStorage.removeItem("myMusic.gate.v1");
+  } catch (_) { /* ignore */ }
 
   const gateEl = document.getElementById("gate");
   const gateForm = document.getElementById("gateForm");
   const gateInput = document.getElementById("gateInput");
   const gateError = document.getElementById("gateError");
+  const gateUnlockBtn = document.getElementById("gateUnlock");
+
+  const hasRememberedApiKey = () =>
+    !!(window.DriveMusic && DriveMusic.getApiKey && DriveMusic.getApiKey());
 
   const showGate = () => {
     document.body.classList.add("gated");
@@ -141,8 +119,13 @@
       gateError.hidden = true;
       gateError.textContent = "";
     }
+    if (gateUnlockBtn) {
+      gateUnlockBtn.disabled = false;
+      gateUnlockBtn.textContent = "Unlock";
+    }
     if (gateInput) {
       gateInput.value = "";
+      gateInput.disabled = false;
       setTimeout(() => gateInput.focus(), 50);
     }
   };
@@ -156,12 +139,21 @@
     }
   };
 
-  const tryUnlock = (typed) => {
-    const ok = String(typed || "").trim() === expectedUnlock();
-    if (!ok) return false;
-    persistGateUnlock();
-    hideGate();
-    return true;
+  const setGateError = (msg) => {
+    if (!gateError) return;
+    gateError.textContent = msg || "";
+    gateError.hidden = !msg;
+  };
+
+  const lockApp = () => {
+    try {
+      if (window.DriveMusic) {
+        DriveMusic.setApiKey("");
+        if (DriveMusic.clearBlobCache) DriveMusic.clearBlobCache();
+      }
+    } catch (_) { /* ignore */ }
+    audio.pause();
+    showGate();
   };
 
 
@@ -1222,11 +1214,7 @@
   });
 
   document.getElementById("btnLogout").addEventListener("click", () => {
-    try {
-      localStorage.removeItem(GATE_KEY);
-    } catch (_) { /* ignore */ }
-    audio.pause();
-    showGate();
+    lockApp();
   });
 
   document.getElementById("btnRepair").addEventListener("click", async () => {
@@ -1346,6 +1334,11 @@
   const refreshDriveLibrary = async ({ silent } = {}) => {
     if (!window.DriveMusic) return;
     if (driveRefreshing) return;
+    if (!DriveMusic.getApiKey || !DriveMusic.getApiKey()) {
+      if (!silent) setDriveStatus("Unlock with your Drive API key first.", true);
+      lockApp();
+      return;
+    }
     const folders = DriveMusic.loadFolders();
     if (!folders.length) {
       applyDriveTracks([]);
@@ -1466,56 +1459,22 @@
   const btnRefreshDrive = document.getElementById("btnRefreshDrive");
   if (btnRefreshDrive) btnRefreshDrive.addEventListener("click", () => refreshDriveLibrary());
 
-  const driveApiKeyInput = document.getElementById("driveApiKeyInput");
   const driveProxyInput = document.getElementById("driveProxyInput");
   const driveKeyStatus = document.getElementById("driveKeyStatus");
-  const btnSaveApiKey = document.getElementById("btnSaveApiKey");
-  const btnClearApiKey = document.getElementById("btnClearApiKey");
   const btnSaveProxy = document.getElementById("btnSaveProxy");
 
   const updateDriveKeyStatus = () => {
     if (!driveKeyStatus || !window.DriveMusic) return;
-    if (DriveMusic.hasApiKeyOverride && DriveMusic.hasApiKeyOverride()) {
-      driveKeyStatus.textContent = "Using Drive API key from localStorage (Sources).";
-    } else if (DriveMusic.getApiKey && DriveMusic.getApiKey()) {
-      driveKeyStatus.textContent = "Playback key available.";
+    if (DriveMusic.getApiKey && DriveMusic.getApiKey()) {
+      driveKeyStatus.textContent = "Playback uses the API key from unlock (stored in this browser).";
     } else {
-      driveKeyStatus.textContent =
-        "No playback key — paste a Drive API key below (stored only in localStorage).";
+      driveKeyStatus.textContent = "Locked — unlock with your Drive API key to play.";
     }
   };
 
   if (window.DriveMusic) {
-    if (driveApiKeyInput) {
-      driveApiKeyInput.value =
-        DriveMusic.getStoredApiKey ? DriveMusic.getStoredApiKey() : "";
-    }
     if (driveProxyInput) driveProxyInput.value = DriveMusic.getMediaProxy();
     updateDriveKeyStatus();
-  }
-  if (btnSaveApiKey) {
-    btnSaveApiKey.addEventListener("click", () => {
-      if (!window.DriveMusic) return;
-      const raw = driveApiKeyInput ? driveApiKeyInput.value.trim() : "";
-      if (!raw) {
-        setDriveStatus("Enter a Drive API key to save, or use Clear.");
-        return;
-      }
-      DriveMusic.setApiKey(raw);
-      DriveMusic.clearBlobCache();
-      updateDriveKeyStatus();
-      setDriveStatus("Drive API key saved to localStorage — try playing a Drive track.");
-    });
-  }
-  if (btnClearApiKey) {
-    btnClearApiKey.addEventListener("click", () => {
-      if (!window.DriveMusic) return;
-      DriveMusic.setApiKey("");
-      if (driveApiKeyInput) driveApiKeyInput.value = "";
-      DriveMusic.clearBlobCache();
-      updateDriveKeyStatus();
-      setDriveStatus("API key cleared from localStorage.");
-    });
   }
   if (btnSaveProxy) {
     btnSaveProxy.addEventListener("click", () => {
@@ -1548,7 +1507,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=12").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=14").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
@@ -1640,26 +1599,43 @@
   };
 
   if (gateForm) {
-    gateForm.addEventListener("submit", (e) => {
+    gateForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const typed = gateInput ? gateInput.value : "";
-      if (tryUnlock(typed)) {
-        startApp();
+      const typed = gateInput ? gateInput.value.trim() : "";
+      if (!window.DriveMusic || !DriveMusic.validateApiKey) {
+        setGateError("Drive module failed to load. Repair and reload.");
         return;
       }
-      if (gateError) {
-        gateError.textContent = "That code didn’t work. Try again.";
-        gateError.hidden = false;
+      if (gateUnlockBtn) {
+        gateUnlockBtn.disabled = true;
+        gateUnlockBtn.textContent = "Checking…";
       }
-      if (gateInput) {
-        gateInput.select();
-        gateInput.focus();
+      if (gateInput) gateInput.disabled = true;
+      setGateError("");
+      try {
+        await DriveMusic.validateApiKey(typed);
+        DriveMusic.setApiKey(typed);
+        if (DriveMusic.clearBlobCache) DriveMusic.clearBlobCache();
+        hideGate();
+        startApp();
+        updateDriveKeyStatus();
+      } catch (err) {
+        setGateError((err && err.message) || "That API key didn’t work. Try again.");
+        if (gateInput) {
+          gateInput.disabled = false;
+          gateInput.select();
+          gateInput.focus();
+        }
+        if (gateUnlockBtn) {
+          gateUnlockBtn.disabled = false;
+          gateUnlockBtn.textContent = "Unlock";
+        }
       }
     });
   }
 
-  // Init — whole app stays behind unlock gate until successful entry (or remembered unlock)
-  if (isGateUnlocked()) {
+  // Init — unlock with remembered Drive API key, else show lock screen
+  if (hasRememberedApiKey()) {
     startApp();
   } else {
     showGate();

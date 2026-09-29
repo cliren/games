@@ -49,12 +49,12 @@ An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remo
 ## Security: API keys
 
 - **Never commit** Google API keys (or any secrets) into this repo.
-- Paste keys only into the Sources UI (`localStorage`). Rotate any key that was ever committed.
+- Enter the key only on the unlock screen (`localStorage`). Rotate any key that was ever committed.
 - `drive.js` `getApiKey()` reads `myMusic.driveApiKey` from localStorage only.
 
 ## Unlock
 
-Year-based gate (Pacific Time). See app copy for the current prompt.
+The Drive API key **is** the password. Unlock validates it with a lightweight Drive `files.list`, then stores it in `myMusic.driveApiKey`. Later visits reuse the stored key. **Logout** clears the key and returns to the lock screen. Sources no longer has an API key field — Refresh uses the unlock key.
 
 ## Develop
 

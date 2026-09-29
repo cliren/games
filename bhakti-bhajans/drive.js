@@ -16,8 +16,8 @@
  *   myMusic.drive.v1         — [{ id, url, name?, addedAt }]
  *   myMusic.driveCache.v1    — { refreshedAt, tracks: [...] }
  *   myMusic.drive.seeded     — "1" after example folder auto-add
- *   myMusic.driveApiKey      — Drive API key for playback (localStorage ONLY)
- *   Never commit API keys. Paste into Sources; getApiKey() reads localStorage only.
+ *   myMusic.driveApiKey      — Drive API key = app unlock password (localStorage ONLY)
+ *   Never commit API keys. Unlock screen writes this; getApiKey() reads it.
  *   myMusic.drive.mediaProxy — optional proxy template with {id} or {url}
  */
 (function (global) {
@@ -29,7 +29,7 @@
   const EXAMPLE_FOLDER_ID = "1YT5oul30_jT5YoReVY9Snz9FS9KEhuAB";
   const EXAMPLE_FOLDER_NAME = "Songs-Surender";
 
-  // NEVER commit a real key. getApiKey() reads localStorage only (Sources UI).
+  // NEVER commit a real key. getApiKey() reads localStorage only (set at unlock).
 
   const AUDIO_EXT_RE = /\.(mp3|m4a|wav|ogg|flac|aac)$/i;
   const CAT_MAP = { bhakti: "bhakti", folk: "folk", other: "other" };
@@ -161,7 +161,7 @@
 
   const hasApiKeyOverride = () => Boolean(getStoredApiKey());
 
-  /** localStorage only (myMusic.driveApiKey via Sources). */
+  /** localStorage only (myMusic.driveApiKey — written by unlock screen). */
   const getApiKey = () => getStoredApiKey();
 
   const setApiKey = (value) => {
@@ -171,6 +171,59 @@
       else localStorage.removeItem(API_KEY_STORAGE);
     } catch (_) { /* quota */ }
     return getApiKey();
+  };
+
+  /**
+   * Lightweight Drive API check (files.list pageSize=1).
+   * Does not log the key. Resolves true on success; throws a safe Error on failure.
+   */
+  const validateApiKey = async (rawKey) => {
+    const key = String(rawKey || "").trim();
+    if (!key) {
+      const err = new Error("Enter your Drive API key.");
+      err.code = "empty";
+      throw err;
+    }
+    // Soft shape check only — real proof is the API response.
+    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(key)) {
+      const err = new Error("That doesn’t look like a Google API key.");
+      err.code = "shape";
+      throw err;
+    }
+    const url =
+      "https://www.googleapis.com/drive/v3/files?pageSize=1&fields=files(id)&key=" +
+      encodeURIComponent(key);
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (_) {
+      const err = new Error("Could not reach Google Drive. Check your connection.");
+      err.code = "network";
+      throw err;
+    }
+    if (res.ok) return true;
+    let message = "That API key didn’t work. Try again.";
+    try {
+      const body = await res.json();
+      const apiMsg = body && body.error && body.error.message
+        ? String(body.error.message)
+        : "";
+      // Surface generic Google messages only — never echo the key.
+      if (/API key not valid/i.test(apiMsg)) {
+        message = "That API key isn’t valid.";
+      } else if (/referer|referrer/i.test(apiMsg)) {
+        message = "API key referrer restriction blocked this site.";
+      } else if (/has not been used|not enabled|accessNotConfigured/i.test(apiMsg)) {
+        message = "Enable the Google Drive API for this key’s project.";
+      } else if (res.status === 403) {
+        message = "API key was rejected (403). Check restrictions and Drive API.";
+      } else if (res.status === 400) {
+        message = "That API key isn’t valid.";
+      }
+    } catch (_) { /* ignore parse */ }
+    const err = new Error(message);
+    err.code = "http_" + res.status;
+    throw err;
   };
 
   /** Template e.g. https://proxy.example/?id={id} or .../?url={url} */
@@ -361,7 +414,7 @@
         );
         if (/Error 403|Forbidden/i.test(html) && !/confirm=/i.test(html)) {
           const e = new Error(
-            "Drive returned 403 Forbidden (cross-site / Sec-Fetch blocked). Set a Drive API key or media proxy in Sources."
+            "Drive returned 403 Forbidden (cross-site / Sec-Fetch blocked). Unlock with a Drive API key or set a media proxy."
           );
           e.code = "DRIVE_CROSS_SITE_BLOCK";
           e.status = res.status;
@@ -564,7 +617,7 @@
     if (ok) return ok;
 
     const hint =
-      "Set a Drive API key (googleapis alt=media) or media proxy in Sources — browsers cannot fetch drive.usercontent cross-site (Sec-Fetch 403).";
+      "Unlock with a Drive API key (googleapis alt=media) or set a media proxy — browsers cannot fetch drive.usercontent cross-site (Sec-Fetch 403).";
     const err = new Error(
       (errors[0] || "Could not download Drive audio") + " — " + hint
     );
@@ -994,6 +1047,7 @@
     hasApiKeyOverride,
     getApiKey,
     setApiKey,
+    validateApiKey,
     getMediaProxy,
     setMediaProxy,
     playbackUrl,
