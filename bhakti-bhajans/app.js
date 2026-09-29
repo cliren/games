@@ -1603,7 +1603,7 @@
       e.preventDefault();
       const typed = gateInput ? gateInput.value.trim() : "";
       if (!window.DriveMusic || !DriveMusic.validateApiKey) {
-        setGateError("Drive module failed to load. Repair and reload.");
+        setGateError("Password check unavailable. Repair and reload.");
         return;
       }
       if (gateUnlockBtn) {
