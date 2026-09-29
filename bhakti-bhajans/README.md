@@ -6,13 +6,14 @@ Ad-free static music library for GitHub Pages. Plays MP3s hosted in this folder 
 
 ## Features
 
-- **Library** with category chips: All / Bhakti / Folk / Other
-- **Sort** by name or date added
+- **Library** with quiet Category / Sort selects (All / Bhakti / Folk / Other · Name / Date)
+- Standalone My Music UI (no Games breadcrumb); hub tile on the games index still links here
+- **Repair / refresh** control clears service worker + caches if playback looks stale
 - **Shuffle** and **repeat** (off / all / one)
 - **Custom playlists** — create, rename, delete; add/remove tracks; reorder with ↑↓ (stored in `localStorage`)
 - **Recently played** (last 30, `localStorage`)
 - Big Play control, filled scrubber, Media Session (lock screen / headset)
-- **Offline-ready:** a service worker caches the app shell on first visit and each audio file the first time you play it
+- **Offline-ready:** service worker (`my-music-shell-v2` / `my-music-audio-v2`) caches the shell and each audio file on first play; loads `library.json` with fallback to `playlist.json`
 - Keyboard: `Space` play/pause, `←`/`→` seek 5s, `Shift+←`/`→` prev/next
 
 ## Data

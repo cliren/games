@@ -28,6 +28,9 @@
   const iconPause = document.getElementById("iconPause");
   const art = document.getElementById("art");
   const sortSelect = document.getElementById("sortSelect");
+  const categorySelect = document.getElementById("categorySelect");
+  const btnRepair = document.getElementById("btnRepair");
+  const btnRepairFooter = document.getElementById("btnRepairFooter");
   const nameDialog = document.getElementById("nameDialog");
   const nameDialogTitle = document.getElementById("nameDialogTitle");
   const nameInput = document.getElementById("nameInput");
@@ -731,20 +734,23 @@
     el.addEventListener("click", () => setTab(el.dataset.tab));
   });
 
-  document.querySelectorAll(".chip").forEach((el) => {
-    el.addEventListener("click", () => {
-      categoryFilter = el.dataset.category;
-      document.querySelectorAll(".chip").forEach((c) => {
-        c.classList.toggle("active", c.dataset.category === categoryFilter);
-      });
-      renderLibrary();
-      if (activeTab === "library") {
-        setQueueFrom(filteredLibrary());
-        highlight();
-      }
-      saveState();
+  const applyCategoryFilter = (value) => {
+    const allowed = ["all", "bhakti", "folk", "other"];
+    categoryFilter = allowed.includes(value) ? value : "all";
+    if (categorySelect) categorySelect.value = categoryFilter;
+    renderLibrary();
+    if (activeTab === "library") {
+      setQueueFrom(filteredLibrary());
+      highlight();
+    }
+    saveState();
+  };
+
+  if (categorySelect) {
+    categorySelect.addEventListener("change", () => {
+      applyCategoryFilter(categorySelect.value);
     });
-  });
+  }
 
   sortSelect.addEventListener("change", () => {
     sortBy = sortSelect.value === "date" ? "date" : "name";
@@ -854,38 +860,101 @@
     });
   };
 
-  // Init
-  loadState();
-  audio.volume = Number(volume.value);
-  sortSelect.value = sortBy;
-  document.querySelectorAll(".chip").forEach((c) => {
-    c.classList.toggle("active", c.dataset.category === categoryFilter);
-  });
-  updateSeekFill();
-  setRepeatUI();
-  setShuffleUI();
-  setupMediaSessionHandlers();
-  registerSW();
+  const repairApp = async () => {
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (window.caches && caches.keys) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (err) {
+      console.warn("Repair cleanup failed", err);
+    }
+    const url = new URL(location.href);
+    url.searchParams.set("_repair", String(Date.now()));
+    location.replace(url.toString());
+  };
 
-  fetch("library.json")
-    .then((r) => {
-      if (!r.ok) throw new Error("Failed to load library.json");
-      return r.json();
-    })
-    .then((data) => {
-      const tracks = Array.isArray(data) ? data : data.tracks || [];
-      library = tracks.map((t, i) => ({
-        id: t.id || `track_${i}_${(t.file || "").replace(/\W+/g, "_")}`,
+  if (btnRepair) btnRepair.addEventListener("click", () => { repairApp(); });
+  if (btnRepairFooter) btnRepairFooter.addEventListener("click", () => { repairApp(); });
+
+  const normalizeTracks = (data) => {
+    const tracks = Array.isArray(data) ? data : (data && data.tracks) || [];
+    return tracks
+      .filter((t) => t && t.file)
+      .map((t, i) => ({
+        id: t.id || `track_${i}_${String(t.file || "").replace(/\W+/g, "_")}`,
         title: t.title || "Untitled",
         artist: t.artist || "",
         file: t.file,
         category: t.category || "other",
         dateAdded: t.dateAdded || "2026-09-28",
       }));
+  };
+
+  const fetchJson = async (url) => {
+    const r = await fetch(url, { cache: "no-cache" });
+    if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
+    return r.json();
+  };
+
+  const loadMusicLibrary = async () => {
+    try {
+      return normalizeTracks(await fetchJson("library.json"));
+    } catch (primaryErr) {
+      console.warn("library.json failed, trying playlist.json", primaryErr);
+      try {
+        return normalizeTracks(await fetchJson("playlist.json"));
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+        throw primaryErr;
+      }
+    }
+  };
+
+  const showLoadError = () => {
+    trackTitle.textContent = "Could not load music library";
+    trackArtist.innerHTML = "";
+    const wrap = document.createElement("span");
+    wrap.className = "load-error";
+    wrap.appendChild(document.createTextNode("Something went wrong. "));
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "btn-text";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => { repairApp(); });
+    wrap.appendChild(retry);
+    trackArtist.appendChild(wrap);
+    trackCategoryEl.textContent = "";
+  };
+
+  // Init
+  loadState();
+  audio.volume = Number(volume.value);
+  sortSelect.value = sortBy;
+  if (categorySelect) categorySelect.value = categoryFilter;
+  updateSeekFill();
+  setRepeatUI();
+  setShuffleUI();
+  setupMediaSessionHandlers();
+  registerSW();
+
+  loadMusicLibrary()
+    .then((tracks) => {
+      library = tracks;
       if (!library.length) {
         trackTitle.textContent = "No tracks";
         trackArtist.textContent = "Add MP3s and update library.json";
         return;
+      }
+      // Stale category filter (e.g. folk/other) with only bhakti tracks → empty queue
+      if (filteredLibrary().length === 0 && library.length > 0) {
+        categoryFilter = "all";
+        if (categorySelect) categorySelect.value = "all";
+        saveState();
       }
       setQueueFrom(filteredLibrary());
       setTab(activeTab === "playlists" || activeTab === "recent" ? activeTab : "library");
@@ -908,7 +977,6 @@
     })
     .catch((err) => {
       console.error(err);
-      trackTitle.textContent = "Could not load library";
-      trackArtist.textContent = "Check library.json";
+      showLoadError();
     });
 })();

@@ -43,26 +43,14 @@ body {
 }
 
 .header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.65rem;
   margin-bottom: 1.25rem;
 }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 0.25rem 0;
-}
-
-.back:hover {
-  color: var(--gold);
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .header-text h1 {
@@ -78,6 +66,41 @@ body {
   margin: 0.2rem 0 0;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.btn-repair {
+  flex-shrink: 0;
+  margin-top: 0.35rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.btn-repair:hover {
+  color: var(--gold);
+  border-color: rgba(232, 184, 109, 0.35);
+  opacity: 1;
+  background: rgba(232, 184, 109, 0.06);
+}
+
+.app-footer {
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
+.btn-repair-footer {
+  margin-top: 0;
+  font-size: 0.75rem;
+  opacity: 0.55;
 }
 
 .player-card {
@@ -360,51 +383,32 @@ body {
   padding: 0.85rem 0.85rem 0.35rem;
 }
 
+.toolbar-quiet {
+  justify-content: flex-start;
+  gap: 0.85rem;
+  padding: 0.7rem 0.95rem 0.25rem;
+}
+
 .toolbar-playlists {
   justify-content: flex-start;
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.chip {
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.chip:hover {
-  color: var(--text);
-}
-
-.chip.active {
-  color: #1a1008;
-  background: linear-gradient(145deg, var(--gold), var(--saffron));
-  border-color: transparent;
-}
-
-.sort-wrap {
-  display: flex;
+.filter-label {
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
 }
 
-.sort-label {
-  font-size: 0.75rem;
+.filter-caption {
+  font-size: 0.72rem;
   color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
-.sort-select,
+.filter-select,
 .add-select {
   font: inherit;
   font-size: 0.82rem;
@@ -412,16 +416,27 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 0.4rem 0.55rem;
+  padding: 0.38rem 0.55rem;
   outline: none;
   cursor: pointer;
   max-width: 160px;
+  appearance: auto;
 }
 
-.sort-select:focus,
+.filter-select:focus,
 .add-select:focus,
 .name-input:focus {
   border-color: rgba(232, 184, 109, 0.45);
+}
+
+.load-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.load-error .btn-text {
+  margin-left: 0.35rem;
+  vertical-align: baseline;
 }
 
 .list-header {

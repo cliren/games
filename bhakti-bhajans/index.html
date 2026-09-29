@@ -6,16 +6,19 @@
   <meta name="description" content="My Music — Remote · Ad-free · Offline-ready. No tracking." />
   <meta name="theme-color" content="#0c0a0f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="My Music" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
 </head>
 <body>
   <main class="app">
     <header class="header">
-      <a class="back" href="../">‹ Games</a>
-      <div class="header-text">
-        <h1>My Music</h1>
-        <p class="tagline">Remote · Ad-free · Offline-ready</p>
+      <div class="header-row">
+        <div class="header-text">
+          <h1>My Music</h1>
+          <p class="tagline">Remote · Ad-free · Offline-ready</p>
+        </div>
+        <button type="button" id="btnRepair" class="btn-repair" title="Unregister service worker, clear caches, and reload">Repair / refresh</button>
       </div>
     </header>
 
@@ -92,20 +95,23 @@
     </nav>
 
     <section id="panelLibrary" class="panel" role="tabpanel" aria-labelledby="tabLibrary">
-      <div class="toolbar">
-        <div class="chips" role="group" aria-label="Category">
-          <button type="button" class="chip active" data-category="all">All</button>
-          <button type="button" class="chip" data-category="bhakti">Bhakti</button>
-          <button type="button" class="chip" data-category="folk">Folk</button>
-          <button type="button" class="chip" data-category="other">Other</button>
-        </div>
-        <div class="sort-wrap">
-          <label class="sort-label" for="sortSelect">Sort</label>
-          <select id="sortSelect" class="sort-select" aria-label="Sort tracks">
+      <div class="toolbar toolbar-quiet">
+        <label class="filter-label" for="categorySelect">
+          <span class="filter-caption">Category</span>
+          <select id="categorySelect" class="filter-select" aria-label="Category">
+            <option value="all">All</option>
+            <option value="bhakti">Bhakti</option>
+            <option value="folk">Folk</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label class="filter-label" for="sortSelect">
+          <span class="filter-caption">Sort</span>
+          <select id="sortSelect" class="filter-select" aria-label="Sort tracks">
             <option value="name">Name</option>
             <option value="date">Date</option>
           </select>
-        </div>
+        </label>
       </div>
       <div class="list-header">
         <h3>Tracks</h3>
@@ -131,7 +137,7 @@
           </div>
         </div>
         <div class="add-track-row">
-          <select id="addTrackSelect" class="sort-select add-select" aria-label="Add track to playlist">
+          <select id="addTrackSelect" class="filter-select add-select" aria-label="Add track to playlist">
             <option value="">Add track…</option>
           </select>
           <button type="button" id="btnAddTrack" class="btn-text">Add</button>
@@ -148,6 +154,10 @@
       <ul id="recentList" class="track-list" role="list"></ul>
       <p id="recentEmpty" class="empty-hint hidden">Play a track and it will show up here.</p>
     </section>
+
+    <footer class="app-footer">
+      <button type="button" id="btnRepairFooter" class="btn-repair btn-repair-footer" title="Unregister service worker, clear caches, and reload">Repair / refresh app</button>
+    </footer>
   </main>
 
   <dialog id="nameDialog" class="name-dialog">
@@ -162,6 +172,6 @@
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
