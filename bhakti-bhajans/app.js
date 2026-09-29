@@ -673,8 +673,9 @@
         const rm = document.createElement("button");
         rm.type = "button";
         rm.className = "row-btn danger";
-        rm.title = "Remove";
-        rm.setAttribute("aria-label", "Remove from playlist");
+        const rmLabel = opts.removeLabel || "Remove";
+        rm.title = rmLabel;
+        rm.setAttribute("aria-label", rmLabel);
         rm.textContent = "×";
         rm.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -794,7 +795,15 @@
       else listEmpty.textContent = isRecent ? "Play a track and it will show up here." : "No songs yet.";
     }
     list.forEach((track, i) => {
-      songListEl.appendChild(makeTrackButton(track, i + 1, { sourceList: list }));
+      const rowOpts = { sourceList: list };
+      if (isRecent) {
+        rowOpts.removeLabel = "Clear from recent";
+        rowOpts.onRemove = () => removeFromRecentlyPlayed(track.id);
+      } else {
+        rowOpts.removeLabel = "Clear song";
+        rowOpts.onRemove = () => removeTrackFromLibrary(track.id);
+      }
+      songListEl.appendChild(makeTrackButton(track, i + 1, rowOpts));
     });
     setShuffleListVisible(btnShuffleList, list.length);
     highlight();
@@ -871,6 +880,7 @@
       playlistTracksEl.appendChild(
         makeTrackButton(track, i + 1, {
           sourceList: tracks,
+          removeLabel: "Remove from playlist",
           onRemove: () => {
             pl.trackIds = pl.trackIds.filter((id) => id !== track.id);
             saveState();
@@ -1342,6 +1352,126 @@
     }
   };
 
+  const resetEmptyPlayer = () => {
+    queue = [];
+    index = 0;
+    hasTrack = false;
+    setPlayingUI(false);
+    miniBar.hidden = true;
+    miniTitle.textContent = "";
+    miniArtist.textContent = "";
+    npTitle.textContent = "";
+    npArtist.textContent = "";
+    npCategory.textContent = "";
+    document.title = "My Music";
+    highlight();
+  };
+
+  const stopIfTrackGone = (removedId) => {
+    const playingId = queue[index] && queue[index].id;
+    if (removedId && playingId === removedId) {
+      audio.pause();
+      audio.removeAttribute("src");
+      try {
+        audio.load();
+      } catch (_) { /* ignore */ }
+    }
+    queue = queue.filter((t) => t && t.id !== removedId);
+    if (index >= queue.length) index = Math.max(0, queue.length - 1);
+    if (!queue.length) {
+      resetEmptyPlayer();
+    } else if (playingId === removedId) {
+      loadTrack(index, false);
+    } else {
+      highlight();
+    }
+  };
+
+  const removeFromRecentlyPlayed = (trackId) => {
+    if (!trackId) return;
+    recentlyPlayed = recentlyPlayed.filter((id) => id !== trackId);
+    saveState();
+    if (!views.list.hidden && listContext.kind === "recent") renderList();
+  };
+
+  /** Remove one song from local library (Drive cache, playlists refs, recent, blob). Password kept. */
+  const removeTrackFromLibrary = (trackId) => {
+    if (!trackId) return;
+    const track = byId(trackId);
+    library = library.filter((t) => t.id !== trackId);
+    recentlyPlayed = recentlyPlayed.filter((id) => id !== trackId);
+    playlists.forEach((pl) => {
+      pl.trackIds = (pl.trackIds || []).filter((id) => id !== trackId);
+    });
+    if (window.DriveMusic && track && track.source === "drive") {
+      const cache = DriveMusic.loadCache();
+      const remaining = (cache.tracks || []).filter((t) => t && t.id !== trackId);
+      DriveMusic.saveCache(remaining);
+      if (track.driveFileId && DriveMusic.clearBlobForFile) {
+        DriveMusic.clearBlobForFile(track.driveFileId);
+      }
+    }
+    saveState();
+    stopIfTrackGone(trackId);
+    updateHomeCounts();
+    if (!views.list.hidden) renderList();
+    else if (!views["playlist-detail"].hidden && activePlaylistId) {
+      const pl = playlists.find((p) => p.id === activePlaylistId);
+      if (pl) {
+        renderPlaylistTracks(pl);
+        populateAddSelect(pl);
+      }
+    } else if (!views.home.hidden) {
+      /* home counts already updated */
+    }
+    if (!views.playlists.hidden) renderPlaylists();
+  };
+
+  /**
+   * Wipe all imported songs / Drive track cache / recently played / playlist contents.
+   * Keeps saved Drive folder URLs and unlock password. Playlists themselves remain (empty).
+   */
+  const clearLibraryAll = () => {
+    const msg =
+      "Clear all songs from this browser? This removes imported Drive tracks, recently played, and playlist song lists. Saved Drive folders and your unlock password are kept — use Refresh to re-import. Use Lock to clear the password.";
+    if (!window.confirm(msg)) return;
+    audio.pause();
+    try {
+      audio.removeAttribute("src");
+      audio.load();
+    } catch (_) { /* ignore */ }
+    if (window.DriveMusic) {
+      if (DriveMusic.clearTrackCache) DriveMusic.clearTrackCache();
+      else {
+        DriveMusic.saveCache([]);
+        if (DriveMusic.clearBlobCache) DriveMusic.clearBlobCache();
+      }
+    }
+    // Drop all local/Drive library rows (no seed audio in this build)
+    library = [];
+    recentlyPlayed = [];
+    playlists.forEach((pl) => {
+      pl.trackIds = [];
+    });
+    currentListTracks = [];
+    saveState();
+    resetEmptyPlayer();
+    updateHomeCounts();
+    renderDriveFolders();
+    setDriveStatus("Library cleared. Folders kept — tap Refresh library to re-import.");
+    if (!views.list.hidden) renderList();
+    else if (!views.playlists.hidden) renderPlaylists();
+    else if (!views["playlist-detail"].hidden && activePlaylistId) {
+      const pl = playlists.find((p) => p.id === activePlaylistId);
+      if (pl) {
+        renderPlaylistTracks(pl);
+        populateAddSelect(pl);
+      }
+    } else {
+      showView("home");
+    }
+  };
+
   const refreshDriveLibrary = async ({ silent } = {}) => {
     if (!window.DriveMusic) return;
     if (driveRefreshing) return;
@@ -1469,6 +1599,8 @@
   if (btnPasteFileLinks) btnPasteFileLinks.addEventListener("click", openDriveFilesDialog);
   const btnRefreshDrive = document.getElementById("btnRefreshDrive");
   if (btnRefreshDrive) btnRefreshDrive.addEventListener("click", () => refreshDriveLibrary());
+  const btnClearLibrary = document.getElementById("btnClearLibrary");
+  if (btnClearLibrary) btnClearLibrary.addEventListener("click", () => clearLibraryAll());
 
   const driveProxyInput = document.getElementById("driveProxyInput");
   const driveKeyStatus = document.getElementById("driveKeyStatus");
@@ -1518,7 +1650,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=16").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=17").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

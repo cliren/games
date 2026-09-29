@@ -11,6 +11,7 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 - **Paste file links** fallback when folder listing is blocked or rate-limited
 - Drive playback via CORS `fetch` → `blob:` URL using a **Drive API key** or **media proxy** (direct usercontent is blocked cross-site by Google’s `Sec-Fetch-Site` policy; CORP also blocks raw `<audio src>`)
 - Local search, shuffle / repeat, custom playlists, recently played (`localStorage` `myMusic.v1`)
+- **Clear library** (Sources) wipes imported songs, recently played, playlist contents, and Drive track/blob cache after confirm — keeps folder URLs and unlock password; per-song **Clear** on Songs / Recently Played
 - Whole-app unlock gate; service worker caches **shell only**; Drive media is never cached
 
 ## Google Drive (keyless)
@@ -54,7 +55,7 @@ An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remo
 
 ## Unlock
 
-The Drive API key **is** the password. Unlock validates it with a lightweight Drive `files.list`, then stores it in `myMusic.driveApiKey`. Later visits reuse the stored key. **Logout** clears the key and returns to the lock screen. Sources no longer has an API key field — Refresh uses the unlock key.
+The unlock **password** is stored in this browser (`myMusic.driveApiKey`). Unlock validates it with Google Drive, then remembers it for later visits. **Lock** clears the password and returns to the lock screen. **Clear library** does **not** clear the password — only Lock does. Refresh uses the unlock password.
 
 ## Develop
 

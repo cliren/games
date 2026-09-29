@@ -16,8 +16,8 @@
  *   myMusic.drive.v1         — [{ id, url, name?, addedAt }]
  *   myMusic.driveCache.v1    — { refreshedAt, tracks: [...] }
  *   myMusic.drive.seeded     — "1" after example folder auto-add
- *   myMusic.driveApiKey      — Drive API key = app unlock password (localStorage ONLY)
- *   Never commit API keys. Unlock screen writes this; getApiKey() reads it.
+ *   myMusic.driveApiKey      — unlock password (localStorage ONLY; never commit)
+ *   Unlock screen writes this; getApiKey() reads it. Clear library does NOT remove it.
  *   myMusic.drive.mediaProxy — optional proxy template with {id} or {url}
  */
 (function (global) {
@@ -372,6 +372,22 @@
   const clearBlobCache = () => {
     for (const entry of blobUrlCache.values()) revokeBlobUrl(entry.url);
     blobUrlCache.clear();
+  };
+
+  const clearBlobForFile = (fileId) => {
+    if (!fileId || !blobUrlCache.has(fileId)) return;
+    const entry = blobUrlCache.get(fileId);
+    blobUrlCache.delete(fileId);
+    if (entry) revokeBlobUrl(entry.url);
+  };
+
+  /** Wipe cached Drive track metadata + in-memory blobs. Keeps folder URL list and unlock password. */
+  const clearTrackCache = () => {
+    try {
+      localStorage.removeItem(CACHE_KEY);
+    } catch (_) { /* ignore */ }
+    clearBlobCache();
+    return { refreshedAt: null, tracks: [] };
   };
 
   const looksLikeAudio = (type, buf) => {
@@ -1116,6 +1132,8 @@
     fetchPlayableUrl,
     getCachedBlobUrl,
     clearBlobCache,
+    clearBlobForFile,
+    clearTrackCache,
     parseConfirmToken,
     refreshAll,
     importFileLinks,
