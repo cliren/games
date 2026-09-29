@@ -2,20 +2,29 @@
  * Google Drive folder import for My Music (static GitHub Pages).
  *
  * Keyless listing: fetch Google's public embeddedfolderview via a CORS-friendly
- * reader proxy (jina.ai), parse file ids + names. Playback uses
- * drive.usercontent.google.com (no key). API keys are not required.
+ * reader proxy (jina.ai), parse file ids + names. Fallbacks: allorigins; paste
+ * multi-line file links.
  *
- * Fallbacks: allorigins proxy of the same HTML; paste multi-line file links.
+ * Playback (browser): drive.usercontent.google.com rejects cross-site requests
+ * (Sec-Fetch-Site: cross-site → 403). Use either:
+ *   1) Drive API key → googleapis.com/.../files/ID?alt=media (CORS OK)
+ *   2) Media proxy URL template (Cloudflare Worker — drive-proxy-worker.js)
+ * Direct usercontent fetch is still attempted (virus-scan confirm retry) for
+ * environments that are not blocked.
  *
  * localStorage:
- *   myMusic.drive.v1      — [{ id, url, name?, addedAt }]
- *   myMusic.driveCache.v1 — { refreshedAt, tracks: [...] }
- *   myMusic.drive.seeded  — "1" after example folder auto-add
+ *   myMusic.drive.v1         — [{ id, url, name?, addedAt }]
+ *   myMusic.driveCache.v1    — { refreshedAt, tracks: [...] }
+ *   myMusic.drive.seeded     — "1" after example folder auto-add
+ *   myMusic.driveApiKey      — optional Google API key (playback)
+ *   myMusic.drive.mediaProxy — optional proxy template with {id} or {url}
  */
 (function (global) {
   const FOLDERS_KEY = "myMusic.drive.v1";
   const CACHE_KEY = "myMusic.driveCache.v1";
   const SEEDED_KEY = "myMusic.drive.seeded";
+  const API_KEY_STORAGE = "myMusic.driveApiKey";
+  const MEDIA_PROXY_STORAGE = "myMusic.drive.mediaProxy";
   const EXAMPLE_FOLDER_ID = "1YT5oul30_jT5YoReVY9Snz9FS9KEhuAB";
   const EXAMPLE_FOLDER_NAME = "Songs-Surender";
 
@@ -135,17 +144,72 @@
     return { seeded: result.added, folders: result.folders, folder: result.folder };
   };
 
-  /**
-   * Direct download URL for publicly shared files (no API key).
-   * Returns audio/mpeg + ACAO:* + Range, but also CORP:same-site and
-   * Content-Disposition:attachment — browsers block no-cors <audio src>,
-   * so play via fetch(mode:"cors") → blob URL (see fetchPlayableUrl).
-   * docs.google.com/uc and drive.google.com/uc currently 403.
-   */
-  const playbackUrl = (fileId) =>
-    `https://drive.usercontent.google.com/download?id=${encodeURIComponent(
-      fileId
-    )}&export=download&confirm=t`;
+  const getApiKey = () => {
+    try {
+      return (localStorage.getItem(API_KEY_STORAGE) || "").trim();
+    } catch (_) {
+      return "";
+    }
+  };
+
+  const setApiKey = (value) => {
+    const v = String(value || "").trim();
+    try {
+      if (v) localStorage.setItem(API_KEY_STORAGE, v);
+      else localStorage.removeItem(API_KEY_STORAGE);
+    } catch (_) { /* quota */ }
+    return getApiKey();
+  };
+
+  /** Template e.g. https://proxy.example/?id={id} or .../?url={url} */
+  const getMediaProxy = () => {
+    try {
+      return (localStorage.getItem(MEDIA_PROXY_STORAGE) || "").trim();
+    } catch (_) {
+      return "";
+    }
+  };
+
+  const setMediaProxy = (value) => {
+    const v = String(value || "").trim();
+    try {
+      if (v) localStorage.setItem(MEDIA_PROXY_STORAGE, v);
+      else localStorage.removeItem(MEDIA_PROXY_STORAGE);
+    } catch (_) { /* quota */ }
+    return getMediaProxy();
+  };
+
+  /** Direct usercontent URL (cookie-less). Browsers often 403 this cross-site. */
+  const usercontentUrl = (fileId, confirm) => {
+    let u =
+      `https://drive.usercontent.google.com/download?id=${encodeURIComponent(
+        fileId
+      )}&export=download`;
+    if (confirm) u += `&confirm=${encodeURIComponent(confirm)}`;
+    return u;
+  };
+
+  /** Preferred playable URL for track.file metadata (API key when set). */
+  const playbackUrl = (fileId) => {
+    const key = getApiKey();
+    if (key) {
+      return (
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+          fileId
+        )}?alt=media&key=${encodeURIComponent(key)}`
+      );
+    }
+    const proxy = getMediaProxy();
+    if (proxy && proxy.includes("{id}")) {
+      return proxy.split("{id}").join(encodeURIComponent(fileId));
+    }
+    if (proxy && proxy.includes("{url}")) {
+      return proxy
+        .split("{url}")
+        .join(encodeURIComponent(usercontentUrl(fileId, "t")));
+    }
+    return usercontentUrl(fileId, "t");
+  };
 
   /** In-memory blob: URL cache keyed by Drive file id (LRU-ish, max 4). */
   const blobUrlCache = new Map(); // fileId -> { url, ts }
@@ -182,17 +246,67 @@
     return entry.url;
   };
 
-  /**
-   * CORS-fetch a Drive file into a blob: URL usable by <audio>.
-   * Needed because usercontent responds with cross-origin-resource-policy:
-   * same-site, which blocks media-element (no-cors) loads from github.io.
-   */
-  const fetchPlayableUrl = async (fileId, { signal } = {}) => {
-    if (!fileId) throw new Error("Missing Drive file id");
-    const cached = getCachedBlobUrl(fileId);
-    if (cached) return cached;
+  const clearBlobCache = () => {
+    for (const entry of blobUrlCache.values()) revokeBlobUrl(entry.url);
+    blobUrlCache.clear();
+  };
 
-    const url = playbackUrl(fileId);
+  const looksLikeAudio = (type, buf) => {
+    const t = (type || "").split(";")[0].trim().toLowerCase();
+    if (/^audio\//.test(t) || t === "application/octet-stream") return true;
+    if (!buf || buf.byteLength < 4) return false;
+    const u8 = new Uint8Array(buf.slice(0, 4));
+    // ID3 or MPEG frame sync
+    if (u8[0] === 0x49 && u8[1] === 0x44 && u8[2] === 0x33) return true;
+    if (u8[0] === 0xff && (u8[1] & 0xe0) === 0xe0) return true;
+    // fLaC / OggS
+    const ascii = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
+    if (ascii === "fLaC" || ascii === "OggS" || ascii === "RIFF") return true;
+    return false;
+  };
+
+  const looksLikeHtml = (type, buf) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("text/html")) return true;
+    if (!buf || buf.byteLength < 12) return false;
+    const head = new TextDecoder("utf-8", { fatal: false })
+      .decode(buf.slice(0, 64))
+      .trimStart()
+      .toLowerCase();
+    return head.startsWith("<!doctype") || head.startsWith("<html");
+  };
+
+  /**
+   * Parse Google virus-scan / confirm interstitial HTML for a confirm token.
+   */
+  const parseConfirmToken = (html) => {
+    const s = String(html || "");
+    let m =
+      s.match(/confirm=([0-9A-Za-z_-]+)/) ||
+      s.match(/name=["']confirm["']\s+value=["']([^"']+)["']/) ||
+      s.match(/value=["']([^"']+)["']\s+name=["']confirm["']/) ||
+      s.match(/download_warning_[^=]+=([0-9A-Za-z_-]+)/) ||
+      s.match(/&amp;confirm=([0-9A-Za-z_-]+)/);
+    if (m) return m[1];
+    m = s.match(/\/uc\?export=download[^"'\s]*confirm=([0-9A-Za-z_-]+)/i);
+    return m ? m[1] : null;
+  };
+
+  const bufferToObjectUrl = (buf, type) => {
+    const mime = /^audio\//i.test((type || "").split(";")[0])
+      ? (type || "").split(";")[0].trim()
+      : "audio/mpeg";
+    const blob = new Blob([buf], { type: mime });
+    return URL.createObjectURL(blob);
+  };
+
+  const storeBlob = (fileId, objectUrl) => {
+    blobUrlCache.set(fileId, { url: objectUrl, ts: Date.now() });
+    trimBlobCache();
+    return objectUrl;
+  };
+
+  const fetchArrayBuffer = async (url, { signal } = {}) => {
     const res = await fetch(url, {
       method: "GET",
       mode: "cors",
@@ -200,29 +314,251 @@
       referrerPolicy: "no-referrer",
       signal,
     });
-    if (!res.ok) {
-      throw new Error(`Drive download failed (HTTP ${res.status})`);
-    }
-    const type = (res.headers.get("content-type") || "").split(";")[0].trim();
-    if (type && !/^audio\//i.test(type) && type !== "application/octet-stream") {
-      // Virus-scan HTML interstitial or wrong content
-      throw new Error(`Unexpected Drive content-type: ${type || "unknown"}`);
-    }
-    const buf = await res.arrayBuffer();
-    if (!buf || buf.byteLength < 64) {
-      throw new Error("Drive download returned empty body");
-    }
-    const mime = /^audio\//i.test(type) ? type : "audio/mpeg";
-    const blob = new Blob([buf], { type: mime });
-    const objectUrl = URL.createObjectURL(blob);
-    blobUrlCache.set(fileId, { url: objectUrl, ts: Date.now() });
-    trimBlobCache();
-    return objectUrl;
+    return res;
   };
 
-  const clearBlobCache = () => {
-    for (const entry of blobUrlCache.values()) revokeBlobUrl(entry.url);
-    blobUrlCache.clear();
+  /**
+   * Direct usercontent download with virus-scan confirm retry.
+   * In real browsers this usually fails with 403 (Sec-Fetch-Site: cross-site).
+   */
+  const fetchViaUsercontent = async (fileId, { signal } = {}) => {
+    let confirm = "t";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const url = usercontentUrl(fileId, confirm);
+      let res;
+      try {
+        res = await fetchArrayBuffer(url, { signal });
+      } catch (err) {
+        const e = new Error(
+          `Drive usercontent fetch failed (${err && err.message ? err.message : "network"}). Google blocks cross-site browser downloads.`
+        );
+        e.code = "DRIVE_FETCH_FAILED";
+        e.cause = err;
+        throw e;
+      }
+      const type = (res.headers.get("content-type") || "").split(";")[0].trim();
+      const buf = await res.arrayBuffer();
+
+      if (res.ok && looksLikeAudio(type, buf) && buf.byteLength >= 64) {
+        return { buf, type };
+      }
+
+      if (looksLikeHtml(type, buf) || (!res.ok && looksLikeHtml(type, buf))) {
+        const html = new TextDecoder("utf-8", { fatal: false }).decode(
+          buf.slice(0, Math.min(buf.byteLength, 120000))
+        );
+        if (/Error 403|Forbidden/i.test(html) && !/confirm=/i.test(html)) {
+          const e = new Error(
+            "Drive returned 403 Forbidden (cross-site / Sec-Fetch blocked). Set a Drive API key or media proxy in Sources."
+          );
+          e.code = "DRIVE_CROSS_SITE_BLOCK";
+          e.status = res.status;
+          throw e;
+        }
+        const token = parseConfirmToken(html);
+        if (token && token !== confirm) {
+          confirm = token;
+          continue;
+        }
+        const e = new Error(
+          "Drive returned an HTML interstitial (virus-scan/confirm) and no confirm token was found."
+        );
+        e.code = "DRIVE_VIRUS_SCAN";
+        e.status = res.status;
+        throw e;
+      }
+
+      if (!res.ok) {
+        const e = new Error(`Drive download failed (HTTP ${res.status})`);
+        e.code = "DRIVE_HTTP";
+        e.status = res.status;
+        throw e;
+      }
+
+      const e = new Error(
+        `Unexpected Drive content-type: ${type || "unknown"} (${buf.byteLength} bytes)`
+      );
+      e.code = "DRIVE_BAD_TYPE";
+      throw e;
+    }
+    const e = new Error("Drive confirm retry exhausted");
+    e.code = "DRIVE_VIRUS_SCAN";
+    throw e;
+  };
+
+  const fetchViaGoogleApis = async (fileId, apiKey, { signal } = {}) => {
+    const url =
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+        fileId
+      )}?alt=media&key=${encodeURIComponent(apiKey)}`;
+    let res;
+    try {
+      res = await fetchArrayBuffer(url, { signal });
+    } catch (err) {
+      const e = new Error(
+        `googleapis fetch failed (${err && err.message ? err.message : "network"})`
+      );
+      e.code = "DRIVE_API_FETCH";
+      throw e;
+    }
+    const type = (res.headers.get("content-type") || "").split(";")[0].trim();
+    const buf = await res.arrayBuffer();
+    if (!res.ok) {
+      let detail = "";
+      try {
+        detail = new TextDecoder("utf-8", { fatal: false })
+          .decode(buf.slice(0, 400))
+          .replace(/\s+/g, " ")
+          .trim();
+      } catch (_) { /* ignore */ }
+      const e = new Error(
+        `Drive API HTTP ${res.status}${detail ? ": " + detail.slice(0, 160) : ""}`
+      );
+      e.code = "DRIVE_API_HTTP";
+      e.status = res.status;
+      throw e;
+    }
+    if (!looksLikeAudio(type, buf) || buf.byteLength < 64) {
+      const e = new Error(
+        `Drive API returned unexpected body (${type || "unknown"}, ${buf.byteLength} bytes)`
+      );
+      e.code = "DRIVE_API_BAD_TYPE";
+      throw e;
+    }
+    return { buf, type };
+  };
+
+  const resolveProxyUrl = (fileId, template) => {
+    const tpl = String(template || "").trim();
+    if (!tpl) return null;
+    const direct = usercontentUrl(fileId, "t");
+    if (tpl.includes("{id}") || tpl.includes("{url}")) {
+      return tpl
+        .split("{id}")
+        .join(encodeURIComponent(fileId))
+        .split("{url}")
+        .join(encodeURIComponent(direct));
+    }
+    // Bare base: append id= query
+    const join = tpl.includes("?") ? "&" : "?";
+    return `${tpl}${join}id=${encodeURIComponent(fileId)}`;
+  };
+
+  const fetchViaProxy = async (fileId, template, { signal } = {}) => {
+    const url = resolveProxyUrl(fileId, template);
+    if (!url) throw new Error("Media proxy URL is empty");
+    let res;
+    try {
+      res = await fetchArrayBuffer(url, { signal });
+    } catch (err) {
+      const e = new Error(
+        `Media proxy fetch failed (${err && err.message ? err.message : "network"})`
+      );
+      e.code = "DRIVE_PROXY_FETCH";
+      throw e;
+    }
+    const type = (res.headers.get("content-type") || "").split(";")[0].trim();
+    const buf = await res.arrayBuffer();
+    if (!res.ok) {
+      const e = new Error(`Media proxy HTTP ${res.status}`);
+      e.code = "DRIVE_PROXY_HTTP";
+      e.status = res.status;
+      throw e;
+    }
+    if (looksLikeHtml(type, buf)) {
+      // Proxy may have forwarded virus-scan HTML — try confirm parse once via proxy of confirmed URL
+      const html = new TextDecoder("utf-8", { fatal: false }).decode(
+        buf.slice(0, Math.min(buf.byteLength, 120000))
+      );
+      const token = parseConfirmToken(html);
+      if (token) {
+        const retryTpl = String(template || "");
+        const confirmed = usercontentUrl(fileId, token);
+        let retryUrl;
+        if (retryTpl.includes("{url}")) {
+          retryUrl = retryTpl.split("{url}").join(encodeURIComponent(confirmed));
+        } else if (retryTpl.includes("{id}")) {
+          // Proxy that only takes id should add confirm itself; fall through
+          retryUrl = null;
+        } else {
+          retryUrl = `${url}${url.includes("?") ? "&" : "?"}confirm=${encodeURIComponent(token)}`;
+        }
+        if (retryUrl) {
+          const res2 = await fetchArrayBuffer(retryUrl, { signal });
+          const type2 = (res2.headers.get("content-type") || "")
+            .split(";")[0]
+            .trim();
+          const buf2 = await res2.arrayBuffer();
+          if (res2.ok && looksLikeAudio(type2, buf2) && buf2.byteLength >= 64) {
+            return { buf: buf2, type: type2 };
+          }
+        }
+      }
+      const e = new Error("Media proxy returned HTML instead of audio");
+      e.code = "DRIVE_PROXY_HTML";
+      throw e;
+    }
+    if (!looksLikeAudio(type, buf) || buf.byteLength < 64) {
+      const e = new Error(
+        `Media proxy unexpected body (${type || "unknown"}, ${buf.byteLength} bytes)`
+      );
+      e.code = "DRIVE_PROXY_BAD_TYPE";
+      throw e;
+    }
+    return { buf, type };
+  };
+
+  /**
+   * CORS-fetch a Drive file into a blob: URL usable by <audio>.
+   * Order: API key (googleapis) → media proxy → direct usercontent (+ confirm).
+   */
+  const fetchPlayableUrl = async (fileId, { signal } = {}) => {
+    if (!fileId) throw new Error("Missing Drive file id");
+    const cached = getCachedBlobUrl(fileId);
+    if (cached) return cached;
+
+    const errors = [];
+    const tryPath = async (label, fn) => {
+      try {
+        const { buf, type } = await fn();
+        const objectUrl = bufferToObjectUrl(buf, type);
+        return storeBlob(fileId, objectUrl);
+      } catch (err) {
+        if (err && err.name === "AbortError") throw err;
+        errors.push(`${label}: ${err && err.message ? err.message : err}`);
+        return null;
+      }
+    };
+
+    const key = getApiKey();
+    if (key) {
+      const ok = await tryPath("api-key", () =>
+        fetchViaGoogleApis(fileId, key, { signal })
+      );
+      if (ok) return ok;
+    }
+
+    const proxy = getMediaProxy();
+    if (proxy) {
+      const ok = await tryPath("proxy", () =>
+        fetchViaProxy(fileId, proxy, { signal })
+      );
+      if (ok) return ok;
+    }
+
+    const ok = await tryPath("usercontent", () =>
+      fetchViaUsercontent(fileId, { signal })
+    );
+    if (ok) return ok;
+
+    const hint =
+      "Set a Drive API key (googleapis alt=media) or media proxy in Sources — browsers cannot fetch drive.usercontent cross-site (Sec-Fetch 403).";
+    const err = new Error(
+      (errors[0] || "Could not download Drive audio") + " — " + hint
+    );
+    err.code = "DRIVE_PLAYBACK_FAILED";
+    err.details = errors;
+    throw err;
   };
 
   const categoryFromFolderName = (name) => {
@@ -627,6 +963,8 @@
   global.DriveMusic = {
     FOLDERS_KEY,
     CACHE_KEY,
+    API_KEY_STORAGE,
+    MEDIA_PROXY_STORAGE,
     EXAMPLE_FOLDER_ID,
     EXAMPLE_FOLDER_NAME,
     extractFolderId,
@@ -639,10 +977,16 @@
     ensureExampleFolder,
     loadCache,
     saveCache,
+    getApiKey,
+    setApiKey,
+    getMediaProxy,
+    setMediaProxy,
     playbackUrl,
+    usercontentUrl,
     fetchPlayableUrl,
     getCachedBlobUrl,
     clearBlobCache,
+    parseConfirmToken,
     refreshAll,
     importFileLinks,
     parseFileLinkList,

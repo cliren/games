@@ -511,7 +511,24 @@
           if (token !== loadToken) return;
           if (err && err.name === "AbortError") return;
           console.warn("Drive playback failed", err);
-          miniArtist.textContent = "Could not play (Drive)";
+          const code = err && err.code ? String(err.code) : "";
+          const msg = (err && err.message) || "Could not play (Drive)";
+          // Surface a short actionable line in the mini-bar (temporary verbosity).
+          let short = "Could not play (Drive)";
+          if (code === "DRIVE_CROSS_SITE_BLOCK" || /Sec-Fetch|cross-site/i.test(msg)) {
+            short = "Drive blocked (need API key/proxy)";
+          } else if (code === "DRIVE_VIRUS_SCAN") {
+            short = "Drive confirm/virus-scan page";
+          } else if (code === "DRIVE_API_HTTP" || code === "DRIVE_API_FETCH") {
+            short = "Drive API key failed";
+          } else if (code === "DRIVE_PROXY_FETCH" || code === "DRIVE_PROXY_HTTP") {
+            short = "Media proxy failed";
+          } else if (msg.length < 64) {
+            short = msg;
+          }
+          miniArtist.textContent = short;
+          npArtist.textContent = msg.slice(0, 180);
+          setDriveStatus(msg.slice(0, 220), true);
           setPlayingUI(false);
           audio.removeAttribute("src");
           try {
@@ -1449,6 +1466,40 @@
   const btnRefreshDrive = document.getElementById("btnRefreshDrive");
   if (btnRefreshDrive) btnRefreshDrive.addEventListener("click", () => refreshDriveLibrary());
 
+  const driveApiKeyInput = document.getElementById("driveApiKeyInput");
+  const driveProxyInput = document.getElementById("driveProxyInput");
+  const btnSaveApiKey = document.getElementById("btnSaveApiKey");
+  const btnSaveProxy = document.getElementById("btnSaveProxy");
+  if (window.DriveMusic) {
+    if (driveApiKeyInput) driveApiKeyInput.value = DriveMusic.getApiKey();
+    if (driveProxyInput) driveProxyInput.value = DriveMusic.getMediaProxy();
+  }
+  if (btnSaveApiKey) {
+    btnSaveApiKey.addEventListener("click", () => {
+      if (!window.DriveMusic) return;
+      DriveMusic.setApiKey(driveApiKeyInput ? driveApiKeyInput.value : "");
+      DriveMusic.clearBlobCache();
+      setDriveStatus(
+        DriveMusic.getApiKey()
+          ? "API key saved — try playing a Drive track."
+          : "API key cleared."
+      );
+    });
+  }
+  if (btnSaveProxy) {
+    btnSaveProxy.addEventListener("click", () => {
+      if (!window.DriveMusic) return;
+      DriveMusic.setMediaProxy(driveProxyInput ? driveProxyInput.value : "");
+      DriveMusic.clearBlobCache();
+      setDriveStatus(
+        DriveMusic.getMediaProxy()
+          ? "Media proxy saved — try playing a Drive track."
+          : "Media proxy cleared."
+      );
+    });
+  }
+
+
   const initDriveUi = () => {
     if (!window.DriveMusic) return;
     const seed = DriveMusic.ensureExampleFolder();
@@ -1466,7 +1517,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=10").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=11").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

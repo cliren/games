@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body>
 
@@ -91,8 +91,19 @@
           </div>
           <p id="driveRefreshStatus" class="sources-status" aria-live="polite"></p>
           <ul id="driveFolderList" class="drive-folder-list" role="list"></ul>
-          <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer). No API key needed.</p>
-          <p class="sources-hint">Folders are listed keylessly via a public page reader (may be rate-limited). If listing fails, use <strong>Paste file links</strong>. Audio streams from Drive — nothing is uploaded to GitHub.</p>
+          <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer). Listing needs no API key.</p>
+          <label class="api-key-label" for="driveApiKeyInput">Drive API key (playback)</label>
+          <div class="api-key-row">
+            <input type="password" id="driveApiKeyInput" class="api-key-input" placeholder="AIza… Drive API key" autocomplete="off" spellcheck="false" />
+            <button type="button" id="btnSaveApiKey" class="btn-text">Save</button>
+          </div>
+          <label class="api-key-label" for="driveProxyInput">Media proxy (optional)</label>
+          <div class="api-key-row">
+            <input type="url" id="driveProxyInput" class="api-key-input" placeholder="https://YOUR_WORKER.workers.dev/?id={id}" autocomplete="off" spellcheck="false" />
+            <button type="button" id="btnSaveProxy" class="btn-text">Save</button>
+          </div>
+          <p class="api-key-hint">Google blocks cross-site browser downloads (<code>Sec-Fetch-Site: cross-site</code> → 403). Playback needs a <strong>Drive API key</strong> (googleapis <code>alt=media</code>, referrer-restrict to <code>cliren.github.io/*</code>) or a small <strong>media proxy</strong> (see <code>drive-proxy-worker.js</code>). Listing stays keyless.</p>
+          <p class="sources-hint">Folders are listed keylessly via a public page reader (may be rate-limited). If listing fails, use <strong>Paste file links</strong>.</p>
         </div>
       </div>
 
@@ -258,7 +269,7 @@
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>
-  <script src="drive.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="drive.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

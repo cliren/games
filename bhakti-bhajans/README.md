@@ -9,7 +9,7 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 - **Library** home with Songs / Recently Played / Bhakti / Folk / Other
 - **Google Drive folders** — paste shared folder URLs (Anyone with the link · Viewer), Refresh to rebuild the library — **no API key**
 - **Paste file links** fallback when folder listing is blocked or rate-limited
-- Drive playback via CORS `fetch` → `blob:` URL (raw `<audio src>` is blocked by Drive’s `Cross-Origin-Resource-Policy: same-site`)
+- Drive playback via CORS `fetch` → `blob:` URL using a **Drive API key** or **media proxy** (direct usercontent is blocked cross-site by Google’s `Sec-Fetch-Site` policy; CORP also blocks raw `<audio src>`)
 - Local search, shuffle / repeat, custom playlists, recently played (`localStorage` `myMusic.v1`)
 - Whole-app unlock gate; service worker caches **shell only**; Drive media is never cached
 
@@ -24,9 +24,14 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 | Action | Needs API key? | How |
 | --- | --- | --- |
 | List folder files | **No** | Proxy fetch of `embeddedfolderview?id=FOLDER` → parse entry ids/names |
-| Play | **No** | `drive.usercontent.google.com/download?id=FILE&export=download&confirm=t` → CORS fetch → blob URL for `<audio>` |
+| Play | **API key or media proxy** | Browser → blob URL. Direct `drive.usercontent` is blocked cross-site (see below). |
 
-**Why blob URLs?** Public Drive downloads return `audio/mpeg`, `Access-Control-Allow-Origin: *`, and `Accept-Ranges: bytes`, but also `Cross-Origin-Resource-Policy: same-site` and `Content-Disposition: attachment`. Media elements use no-cors mode, so the browser blocks the response from github.io. A `fetch(..., { mode: "cors" })` is allowed; we turn the body into a same-origin `blob:` URL.
+**Why playback needs a key or proxy (v11):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
+
+**Playback options (Sources):**
+1. **Drive API key** — `googleapis.com/drive/v3/files/ID?alt=media&key=…` (CORS works). Restrict the key’s HTTP referrer to `https://cliren.github.io/*`. Stored in `localStorage` `myMusic.driveApiKey`.
+2. **Media proxy** — deploy `drive-proxy-worker.js` (Cloudflare Worker), then set proxy to `https://YOUR.workers.dev/?id={id}` (`myMusic.drive.mediaProxy`). The worker fetches Drive server-side and strips CORP.
+3. Direct usercontent is still tried (with virus-scan `confirm=` token retry) for non-blocked environments.
 
 **Categories:** files in the root of a linked folder → `bhakti`. One-level subfolders named `Bhakti` / `Folk` / `Other` (any case) assign that category.
 
@@ -37,6 +42,8 @@ An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remo
 - Folder list: `localStorage` `myMusic.drive.v1` → `[{ id, url, name?, addedAt }]`
 - Cached Drive track metadata: `myMusic.driveCache.v1`
 - Example seed flag: `myMusic.drive.seeded`
+- Optional playback API key: `myMusic.driveApiKey`
+- Optional media proxy template: `myMusic.drive.mediaProxy` (`{id}` / `{url}`)
 
 ## Unlock
 
