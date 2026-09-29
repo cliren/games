@@ -77,6 +77,89 @@ body {
   font-weight: 400;
 }
 
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.search-wrap {
+  padding: 0.15rem 1rem 0.85rem;
+}
+
+.list-search-wrap {
+  padding: 0.55rem 1rem 0.15rem;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-fill);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.search-field:focus-within {
+  background: var(--bg);
+  border-color: var(--separator-strong);
+  box-shadow: 0 0 0 3px rgba(252, 60, 68, 0.12);
+}
+
+.search-field-compact {
+  padding: 0.45rem 0.7rem;
+}
+
+.search-icon {
+  color: var(--text-tertiary);
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transform: scaleX(-1);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: searchfield-cancel-button;
+  cursor: pointer;
+}
+
+.search-status {
+  margin: 0.35rem 1.25rem 0.15rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.home-search-results {
+  padding-bottom: 0.5rem;
+}
+
 .repair-btn {
   position: absolute;
   top: 1.1rem;

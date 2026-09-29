@@ -1,13 +1,13 @@
 /* My Music — shell + played-audio cache (static, no backend) */
-const SHELL_CACHE = "my-music-shell-v3";
-const AUDIO_CACHE = "my-music-audio-v3";
+const SHELL_CACHE = "my-music-shell-v4";
+const AUDIO_CACHE = "my-music-audio-v4";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=3",
+  "./styles.css?v=4",
   "./app.js",
-  "./app.js?v=3",
+  "./app.js?v=4",
   "./library.json",
   "./playlist.json",
 ];

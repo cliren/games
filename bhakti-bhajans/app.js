@@ -51,6 +51,14 @@
   const countBhakti = document.getElementById("countBhakti");
   const countFolk = document.getElementById("countFolk");
   const countOther = document.getElementById("countOther");
+  const searchInput = document.getElementById("searchInput");
+  const homeBrowse = document.getElementById("homeBrowse");
+  const homeSearchResults = document.getElementById("homeSearchResults");
+  const searchList = document.getElementById("searchList");
+  const searchEmpty = document.getElementById("searchEmpty");
+  const searchStatus = document.getElementById("searchStatus");
+  const listSearchInput = document.getElementById("listSearchInput");
+  const listSearchWrap = document.getElementById("listSearchWrap");
 
   const views = {
     home: document.getElementById("viewHome"),
@@ -77,6 +85,8 @@
   let nameDialogResolve = null;
   /** Current list context for Songs/category/recent */
   let listContext = { kind: "songs", category: null };
+  /** Filter query for Songs/category list drill-in */
+  let listFilterQuery = "";
   /** Tracks currently shown in list view (for shuffle play) */
   let currentListTracks = [];
   let hasTrack = false;
@@ -523,6 +533,74 @@
     return li;
   };
 
+
+  const isAudioTrack = (t) => {
+    if (!t || !t.file) return false;
+    return /\.(mp3|m4a|ogg|wav|aac)$/i.test(t.file);
+  };
+
+  const trackMatchesQuery = (track, q) => {
+    if (!q) return true;
+    const hay = [
+      track.title || "",
+      track.artist || "",
+      CAT_LABELS[track.category] || track.category || "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  };
+
+  const filterLibrary = (q) => {
+    const query = (q || "").trim().toLowerCase();
+    return library.filter((t) => isAudioTrack(t) && trackMatchesQuery(t, query));
+  };
+
+  const clearHomeSearch = () => {
+    if (searchInput) searchInput.value = "";
+    renderHomeSearch("");
+  };
+
+  const renderHomeSearch = (raw) => {
+    const q = (raw || "").trim();
+    const searching = q.length > 0;
+    if (homeBrowse) {
+      homeBrowse.classList.toggle("hidden", searching);
+      homeBrowse.hidden = searching;
+    }
+    if (homeSearchResults) {
+      homeSearchResults.classList.toggle("hidden", !searching);
+      homeSearchResults.hidden = !searching;
+    }
+    if (!searching) {
+      if (searchList) searchList.innerHTML = "";
+      if (searchStatus) searchStatus.textContent = "";
+      if (searchEmpty) {
+        searchEmpty.classList.add("hidden");
+        searchEmpty.hidden = true;
+      }
+      return;
+    }
+    const matches = filterLibrary(q).slice().sort(compareTracks);
+    currentListTracks = matches;
+    if (searchList) searchList.innerHTML = "";
+    if (searchStatus) {
+      searchStatus.textContent = matches.length
+        ? `${matches.length} result${matches.length === 1 ? "" : "s"}`
+        : "";
+    }
+    if (searchEmpty) {
+      const empty = matches.length === 0;
+      searchEmpty.classList.toggle("hidden", !empty);
+      searchEmpty.hidden = !empty;
+      searchEmpty.textContent = "No matching songs.";
+    }
+    matches.forEach((track, i) => {
+      searchList.appendChild(makeTrackButton(track, i + 1, { sourceList: matches }));
+    });
+    highlight();
+  };
+
   const setShuffleListVisible = (btn, n) => {
     const show = n >= 2;
     btn.classList.toggle("hidden", !show);
@@ -530,17 +608,27 @@
   };
 
   const renderList = () => {
-    const list = songsForContext();
+    let list = songsForContext().filter(isAudioTrack);
+    const isRecent = listContext.kind === "recent";
+    const canFilter = !isRecent;
+    if (listSearchWrap) {
+      listSearchWrap.classList.toggle("hidden", !canFilter);
+      listSearchWrap.hidden = !canFilter;
+    }
+    if (canFilter && listFilterQuery.trim()) {
+      const q = listFilterQuery.trim().toLowerCase();
+      list = list.filter((t) => trackMatchesQuery(t, q));
+    }
     currentListTracks = list;
     songListEl.innerHTML = "";
-    const isRecent = listContext.kind === "recent";
     listToolbar.classList.toggle("hidden", isRecent);
     listToolbar.hidden = isRecent;
     listCount.textContent = list.length ? `${list.length} song${list.length === 1 ? "" : "s"}` : "";
     listEmpty.classList.toggle("hidden", list.length > 0);
     listEmpty.hidden = list.length > 0;
     if (!list.length) {
-      listEmpty.textContent = isRecent ? "Play a track and it will show up here." : "No songs yet.";
+      if (canFilter && listFilterQuery.trim()) listEmpty.textContent = "No matching songs.";
+      else listEmpty.textContent = isRecent ? "Play a track and it will show up here." : "No songs yet.";
     }
     list.forEach((track, i) => {
       songListEl.appendChild(makeTrackButton(track, i + 1, { sourceList: list }));
@@ -551,12 +639,20 @@
 
   const openList = (kind, category) => {
     listContext = { kind, category: category || null };
+    listFilterQuery = "";
+    if (listSearchInput) {
+      listSearchInput.value = "";
+      if (kind === "songs") listSearchInput.placeholder = "Find in Songs";
+      else if (kind === "category") listSearchInput.placeholder = `Find in ${CAT_LABELS[category] || category}`;
+      else listSearchInput.placeholder = "Find songs";
+    }
     if (kind === "songs") listTitle.textContent = "Songs";
     else if (kind === "recent") listTitle.textContent = "Recently Played";
     else listTitle.textContent = CAT_LABELS[category] || category;
     document.querySelectorAll(".sort-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.sort === sortBy);
     });
+    clearHomeSearch();
     showView("list");
     renderList();
   };
@@ -685,11 +781,51 @@
     saveState();
   };
 
+
+  // ——— Search ———
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      renderHomeSearch(searchInput.value);
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.code === "Escape") {
+        e.preventDefault();
+        clearHomeSearch();
+        searchInput.blur();
+      }
+    });
+    searchInput.addEventListener("search", () => {
+      // native clear button on type=search
+      renderHomeSearch(searchInput.value);
+    });
+  }
+
+  if (listSearchInput) {
+    listSearchInput.addEventListener("input", () => {
+      listFilterQuery = listSearchInput.value;
+      renderList();
+    });
+    listSearchInput.addEventListener("keydown", (e) => {
+      if (e.code === "Escape") {
+        e.preventDefault();
+        listFilterQuery = "";
+        listSearchInput.value = "";
+        renderList();
+        listSearchInput.blur();
+      }
+    });
+    listSearchInput.addEventListener("search", () => {
+      listFilterQuery = listSearchInput.value;
+      renderList();
+    });
+  }
+
   // ——— Navigation ———
   document.querySelectorAll(".dest-row").forEach((el) => {
     el.addEventListener("click", () => {
       const nav = el.dataset.nav;
       if (nav === "playlists") {
+        clearHomeSearch();
         showView("playlists");
         renderPlaylists();
       } else if (nav === "songs") {
@@ -703,6 +839,8 @@
   });
 
   document.getElementById("btnBackLibrary").addEventListener("click", () => {
+    listFilterQuery = "";
+    if (listSearchInput) listSearchInput.value = "";
     showView("home");
     updateHomeCounts();
   });
@@ -894,6 +1032,10 @@
       closeSheet();
       return;
     }
+    if (e.code === "Escape" && searchInput && searchInput.value.trim() && !views.home.hidden) {
+      clearHomeSearch();
+      return;
+    }
     if (e.code === "Space") {
       e.preventDefault();
       playPause();
@@ -924,7 +1066,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=3").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=4").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

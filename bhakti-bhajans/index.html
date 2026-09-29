@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
   <main class="app" id="app">
@@ -20,39 +20,55 @@
         <button type="button" id="btnRepair" class="repair-btn" title="Clear caches and reload" aria-label="Repair">Repair</button>
       </header>
 
-      <nav class="dest-list" aria-label="Library">
-        <button type="button" class="dest-row" data-nav="playlists">
-          <span class="dest-label">Playlists</span>
-          <span class="dest-chevron" aria-hidden="true">›</span>
-        </button>
-        <button type="button" class="dest-row" data-nav="songs">
-          <span class="dest-label">Songs</span>
-          <span class="dest-chevron" aria-hidden="true">›</span>
-        </button>
-        <button type="button" class="dest-row" data-nav="recent">
-          <span class="dest-label">Recently Played</span>
-          <span class="dest-chevron" aria-hidden="true">›</span>
-        </button>
-      </nav>
+      <div class="search-wrap">
+        <label class="visually-hidden" for="searchInput">Find in My Music</label>
+        <div class="search-field">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input type="search" id="searchInput" class="search-input" placeholder="Find in My Music" autocomplete="off" enterkeyhint="search" spellcheck="false" />
+        </div>
+      </div>
 
-      <h2 class="section-label">Categories</h2>
-      <nav class="dest-list" aria-label="Categories">
-        <button type="button" class="dest-row" data-nav="category" data-category="bhakti">
-          <span class="dest-label">Bhakti</span>
-          <span class="dest-meta" id="countBhakti"></span>
-          <span class="dest-chevron" aria-hidden="true">›</span>
-        </button>
-        <button type="button" class="dest-row" data-nav="category" data-category="folk">
-          <span class="dest-label">Folk</span>
-          <span class="dest-meta" id="countFolk"></span>
-          <span class="dest-chevron" aria-hidden="true">›</span>
-        </button>
-        <button type="button" class="dest-row" data-nav="category" data-category="other">
-          <span class="dest-label">Other</span>
-          <span class="dest-meta" id="countOther"></span>
-          <span class="dest-chevron" aria-hidden="true">›</span>
-        </button>
-      </nav>
+      <div id="homeBrowse">
+        <nav class="dest-list" aria-label="Library">
+          <button type="button" class="dest-row" data-nav="playlists">
+            <span class="dest-label">Playlists</span>
+            <span class="dest-chevron" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="dest-row" data-nav="songs">
+            <span class="dest-label">Songs</span>
+            <span class="dest-chevron" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="dest-row" data-nav="recent">
+            <span class="dest-label">Recently Played</span>
+            <span class="dest-chevron" aria-hidden="true">›</span>
+          </button>
+        </nav>
+
+        <h2 class="section-label">Categories</h2>
+        <nav class="dest-list" aria-label="Categories">
+          <button type="button" class="dest-row" data-nav="category" data-category="bhakti">
+            <span class="dest-label">Bhakti</span>
+            <span class="dest-meta" id="countBhakti"></span>
+            <span class="dest-chevron" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="dest-row" data-nav="category" data-category="folk">
+            <span class="dest-label">Folk</span>
+            <span class="dest-meta" id="countFolk"></span>
+            <span class="dest-chevron" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="dest-row" data-nav="category" data-category="other">
+            <span class="dest-label">Other</span>
+            <span class="dest-meta" id="countOther"></span>
+            <span class="dest-chevron" aria-hidden="true">›</span>
+          </button>
+        </nav>
+      </div>
+
+      <div id="homeSearchResults" class="home-search-results hidden" hidden>
+        <p id="searchStatus" class="search-status" aria-live="polite"></p>
+        <ul id="searchList" class="track-list" role="list"></ul>
+        <p id="searchEmpty" class="empty-hint hidden" hidden>No matching songs.</p>
+      </div>
     </section>
 
     <!-- DRILL-IN: Songs / Category / Recent -->
@@ -62,6 +78,13 @@
         <h1 class="drill-title" id="listTitle">Songs</h1>
         <button type="button" id="btnShuffleList" class="header-action hidden" hidden aria-label="Shuffle play">Shuffle</button>
       </header>
+      <div class="list-search-wrap" id="listSearchWrap">
+        <label class="visually-hidden" for="listSearchInput">Filter songs</label>
+        <div class="search-field search-field-compact">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input type="search" id="listSearchInput" class="search-input" placeholder="Find in Songs" autocomplete="off" enterkeyhint="search" spellcheck="false" />
+        </div>
+      </div>
       <div class="list-toolbar" id="listToolbar">
         <div class="sort-seg" role="group" aria-label="Sort">
           <button type="button" class="sort-btn active" data-sort="name">Name</button>
@@ -178,6 +201,6 @@
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
