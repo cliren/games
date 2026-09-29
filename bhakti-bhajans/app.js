@@ -1660,7 +1660,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=18").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=19").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

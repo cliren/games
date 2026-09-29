@@ -842,6 +842,19 @@
     return CAT_MAP[key] || null;
   };
 
+  // Root-level files do not have a folder category, so use their filename/title.
+  // Keep the keyword order stable: a Bhakti match wins if a title contains both.
+  const categoryFromTrackName = (name) => {
+    const value = String(name || "").toLowerCase();
+    if (["bhakti", "bhajan", "krishna", "shiva", "govind", "mantra"].some((word) => value.includes(word))) {
+      return "bhakti";
+    }
+    if (["folk", "village"].some((word) => value.includes(word))) {
+      return "folk";
+    }
+    return "other";
+  };
+
   const titleFromName = (name) => {
     let t = String(name || "Untitled").trim();
     t = t.replace(AUDIO_EXT_RE, "");
@@ -1275,7 +1288,8 @@
       title: titleFromName(file.name),
       artist: "",
       file: playbackUrl(file.id),
-      category: category || "bhakti",
+      // An explicit parent folder category takes precedence over title heuristics.
+      category: categoryFromFolderName(category) || category || categoryFromTrackName(file.name),
       dateAdded: new Date().toISOString().slice(0, 10),
       source: "drive",
       driveFileId: file.id,
@@ -1287,8 +1301,8 @@
   };
 
   /**
-   * List one linked folder: root audio → bhakti; recurse one level into
-   * Bhakti / Folk / Other subfolders for category.
+   * List one linked folder: categorize root audio from filename/title heuristics;
+   * recurse one level into Bhakti / Folk / Other subfolders, whose category wins.
    * Trust listing.files (already audio-filtered); do not drop extension-less names.
    */
   const listFolderTracks = async (folder) => {
@@ -1302,7 +1316,7 @@
 
     const tracks = [];
     for (const f of listing.files) {
-      tracks.push(fileToTrack(f, "bhakti", folder.id));
+      tracks.push(fileToTrack(f, null, folder.id));
     }
 
     for (const sub of listing.folders) {

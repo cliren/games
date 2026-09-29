@@ -27,14 +27,14 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 | List folder files | **Password preferred** | Drive `files.list` when unlocked (complete). Keyless: merge jina/allorigins of `embeddedfolderview` (jina alone often truncates) |
 | Play | **API key or media proxy** | Browser → blob URL. Direct `drive.usercontent` is blocked cross-site (see below). |
 
-**Why playback needs a password or proxy (v11–v18):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
+**Why playback needs a password or proxy (v11–v19):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
 
 **Playback options (Sources):**
 1. **Drive API key** — `googleapis.com/drive/v3/files/ID?alt=media&key=…` (CORS works). Restrict the key’s HTTP referrer to `https://cliren.github.io/*`. Paste into **Sources** only — stored in `localStorage` `myMusic.driveApiKey`. **Never commit API keys** (no embedded default in `drive.js`).
 2. **Media proxy** — deploy `drive-proxy-worker.js` (Cloudflare Worker), then set proxy to `https://YOUR.workers.dev/?id={id}` (`myMusic.drive.mediaProxy`). The worker fetches Drive server-side and strips CORP.
 3. Direct usercontent is still tried (with virus-scan `confirm=` token retry) for non-blocked environments.
 
-**Categories:** files in the root of a linked folder → `bhakti`. One-level subfolders named `Bhakti` / `Folk` / `Other` (any case) assign that category.
+**Categories:** files in the root of a linked folder are classified from their filename/title: `bhakti`, `bhajan`, `krishna`, `shiva`, `govind`, or `mantra` → `bhakti`; `folk` or `village` → `folk`; otherwise → `other`. One-level subfolders named `Bhakti` / `Folk` / `Other` (any case) override the filename/title classification.
 
 An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remove it anytime.
 
