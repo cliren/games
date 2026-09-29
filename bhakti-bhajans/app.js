@@ -1468,20 +1468,58 @@
 
   const driveApiKeyInput = document.getElementById("driveApiKeyInput");
   const driveProxyInput = document.getElementById("driveProxyInput");
+  const driveKeyStatus = document.getElementById("driveKeyStatus");
   const btnSaveApiKey = document.getElementById("btnSaveApiKey");
+  const btnClearApiKey = document.getElementById("btnClearApiKey");
   const btnSaveProxy = document.getElementById("btnSaveProxy");
+
+  const updateDriveKeyStatus = () => {
+    if (!driveKeyStatus || !window.DriveMusic) return;
+    if (DriveMusic.hasApiKeyOverride && DriveMusic.hasApiKeyOverride()) {
+      driveKeyStatus.textContent = "Using your personal API key override (localStorage).";
+    } else if (DriveMusic.hasDefaultApiKey && DriveMusic.hasDefaultApiKey()) {
+      driveKeyStatus.textContent = "Playback key configured — Drive tracks play for all visitors.";
+    } else if (DriveMusic.getApiKey && DriveMusic.getApiKey()) {
+      driveKeyStatus.textContent = "Playback key available.";
+    } else {
+      driveKeyStatus.textContent =
+        "No playback key — set an override below or deploy with the site default.";
+    }
+  };
+
   if (window.DriveMusic) {
-    if (driveApiKeyInput) driveApiKeyInput.value = DriveMusic.getApiKey();
+    // Never put the embedded default into the input (would expose it in the DOM).
+    if (driveApiKeyInput) {
+      driveApiKeyInput.value =
+        DriveMusic.getStoredApiKey ? DriveMusic.getStoredApiKey() : "";
+    }
     if (driveProxyInput) driveProxyInput.value = DriveMusic.getMediaProxy();
+    updateDriveKeyStatus();
   }
   if (btnSaveApiKey) {
     btnSaveApiKey.addEventListener("click", () => {
       if (!window.DriveMusic) return;
-      DriveMusic.setApiKey(driveApiKeyInput ? driveApiKeyInput.value : "");
+      const raw = driveApiKeyInput ? driveApiKeyInput.value.trim() : "";
+      if (!raw) {
+        setDriveStatus("Enter a key to save an override, or use Clear override.");
+        return;
+      }
+      DriveMusic.setApiKey(raw);
       DriveMusic.clearBlobCache();
+      updateDriveKeyStatus();
+      setDriveStatus("Personal API key override saved — try playing a Drive track.");
+    });
+  }
+  if (btnClearApiKey) {
+    btnClearApiKey.addEventListener("click", () => {
+      if (!window.DriveMusic) return;
+      DriveMusic.setApiKey("");
+      if (driveApiKeyInput) driveApiKeyInput.value = "";
+      DriveMusic.clearBlobCache();
+      updateDriveKeyStatus();
       setDriveStatus(
-        DriveMusic.getApiKey()
-          ? "API key saved — try playing a Drive track."
+        DriveMusic.hasDefaultApiKey && DriveMusic.hasDefaultApiKey()
+          ? "Override cleared — using site playback key."
           : "API key cleared."
       );
     });
@@ -1517,7 +1555,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=11").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=12").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

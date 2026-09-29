@@ -16,7 +16,9 @@
  *   myMusic.drive.v1         — [{ id, url, name?, addedAt }]
  *   myMusic.driveCache.v1    — { refreshedAt, tracks: [...] }
  *   myMusic.drive.seeded     — "1" after example folder auto-add
- *   myMusic.driveApiKey      — optional Google API key (playback)
+ *   myMusic.driveApiKey      — optional override of embedded playback key
+ * Embedded default key (injected at edit time) is HTTP-referrer
+ * restricted to cliren.github.io — visitors need no paste for playback.
  *   myMusic.drive.mediaProxy — optional proxy template with {id} or {url}
  */
 (function (global) {
@@ -27,6 +29,11 @@
   const MEDIA_PROXY_STORAGE = "myMusic.drive.mediaProxy";
   const EXAMPLE_FOLDER_ID = "1YT5oul30_jT5YoReVY9Snz9FS9KEhuAB";
   const EXAMPLE_FOLDER_NAME = "Songs-Surender";
+
+  // Injected from MY_MUSIC_DRIVE_API_KEY at edit/build time.
+  // HTTP-referrer restricted to cliren.github.io (Google Cloud Console).
+  // Prefer localStorage override when set; otherwise use this default.
+  const DEFAULT_DRIVE_API_KEY = "AIzaSyAb3nwY2s1huuDojg12qVyRW8jxJFkO_lU";
 
   const AUDIO_EXT_RE = /\.(mp3|m4a|wav|ogg|flac|aac)$/i;
   const CAT_MAP = { bhakti: "bhakti", folk: "folk", other: "other" };
@@ -144,12 +151,24 @@
     return { seeded: result.added, folders: result.folders, folder: result.folder };
   };
 
-  const getApiKey = () => {
+  /** localStorage override only (empty when using embedded default). */
+  const getStoredApiKey = () => {
     try {
       return (localStorage.getItem(API_KEY_STORAGE) || "").trim();
     } catch (_) {
       return "";
     }
+  };
+
+  const hasDefaultApiKey = () => Boolean((DEFAULT_DRIVE_API_KEY || "").trim());
+
+  const hasApiKeyOverride = () => Boolean(getStoredApiKey());
+
+  /** Prefer localStorage override; else embedded DEFAULT_DRIVE_API_KEY. */
+  const getApiKey = () => {
+    const override = getStoredApiKey();
+    if (override) return override;
+    return (DEFAULT_DRIVE_API_KEY || "").trim();
   };
 
   const setApiKey = (value) => {
@@ -977,6 +996,9 @@
     ensureExampleFolder,
     loadCache,
     saveCache,
+    getStoredApiKey,
+    hasDefaultApiKey,
+    hasApiKeyOverride,
     getApiKey,
     setApiKey,
     getMediaProxy,

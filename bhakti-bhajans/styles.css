@@ -1344,3 +1344,25 @@ body.gated .name-dialog {
   color: var(--text-secondary);
   line-height: 1.4;
 }
+
+.api-key-status {
+  margin: 0.55rem 0 0.35rem;
+  font-size: 0.85rem;
+  color: #1a7f37;
+  font-weight: 550;
+}
+.api-key-advanced {
+  margin-top: 0.55rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding-top: 0.45rem;
+}
+.api-key-summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #666;
+  user-select: none;
+}
+.api-key-advanced[open] .api-key-summary {
+  margin-bottom: 0.45rem;
+  color: #333;
+}

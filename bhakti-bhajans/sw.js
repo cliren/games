@@ -1,14 +1,14 @@
-/* My Music — shell cache only (v11). No local audio/; Drive media is never intercepted. */
-const SHELL_CACHE = "my-music-shell-v11";
+/* My Music — shell cache only (v12). No local audio/; Drive media is never intercepted. */
+const SHELL_CACHE = "my-music-shell-v12";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=11",
+  "./styles.css?v=12",
   "./app.js",
-  "./app.js?v=11",
+  "./app.js?v=12",
   "./drive.js",
-  "./drive.js?v=11",
+  "./drive.js?v=12",
   "./library.json",
   "./playlist.json",
 ];
