@@ -8,19 +8,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
 
-  <!-- Unlock = Drive API key (remembered in localStorage) -->
+  <!-- Unlock password is remembered in localStorage -->
   <div id="gate" class="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
     <div class="gate-panel">
       <div class="gate-glyph" aria-hidden="true">♪</div>
       <h1 id="gateTitle" class="gate-title">My Music</h1>
-      <p class="gate-hint">Enter your Google Drive API key to unlock. It’s remembered in this browser.</p>
+      <p class="gate-hint">Enter your password to unlock. It’s remembered in this browser.</p>
       <form id="gateForm" class="gate-form" autocomplete="off">
-        <label class="visually-hidden" for="gateInput">Drive API key</label>
-        <input type="password" id="gateInput" class="gate-input" placeholder="Drive API key" autocomplete="current-password" enterkeyhint="go" autofocus spellcheck="false" />
+        <label class="visually-hidden" for="gateInput">Password</label>
+        <input type="password" id="gateInput" class="gate-input" placeholder="Password" autocomplete="current-password" enterkeyhint="go" autofocus spellcheck="false" />
         <button type="submit" id="gateUnlock" class="gate-btn">Unlock</button>
         <p id="gateError" class="gate-error" role="alert" hidden></p>
       </form>
@@ -34,7 +34,7 @@
         <h1 class="lib-title">My Music</h1>
         <p class="lib-subtitle">Ad-free · Remote</p>
         <div class="header-actions">
-          <button type="button" id="btnLogout" class="repair-btn" title="Clear API key and lock" aria-label="Logout">Logout</button>
+          <button type="button" id="btnLogout" class="repair-btn" title="Clear password and lock" aria-label="Clear password and lock">Lock</button>
           <button type="button" id="btnRepair" class="repair-btn" title="Clear caches and reload" aria-label="Repair">Repair</button>
         </div>
       </header>
@@ -91,7 +91,7 @@
           </div>
           <p id="driveRefreshStatus" class="sources-status" aria-live="polite"></p>
           <ul id="driveFolderList" class="drive-folder-list" role="list"></ul>
-          <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer). Listing needs no API key.</p>
+          <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer). Listing needs no password.</p>
           <p id="driveKeyStatus" class="api-key-status" aria-live="polite"></p>
           <details class="api-key-advanced" id="driveKeyAdvanced">
             <summary class="api-key-summary">Advanced: media proxy (optional)</summary>
@@ -100,9 +100,9 @@
               <input type="url" id="driveProxyInput" class="api-key-input" placeholder="https://YOUR_WORKER.workers.dev/?id={id}" autocomplete="off" spellcheck="false" />
               <button type="button" id="btnSaveProxy" class="btn-text">Save</button>
             </div>
-            <p class="api-key-hint">Playback uses the Drive API key from unlock (<code>myMusic.driveApiKey</code>). Optional: set a media proxy template with <code>{id}</code> instead. Never commit keys.</p>
+            <p class="api-key-hint">Playback uses the password from unlock (stored in this browser). Optional: set a media proxy template with <code>{id}</code> instead. Never commit credentials.</p>
           </details>
-          <p class="sources-hint">Folders are listed keylessly via a public page reader (may be rate-limited). If listing fails, use <strong>Paste file links</strong>. Refresh uses your unlock API key.</p>
+          <p class="sources-hint">Folders are listed keylessly via a public page reader (may be rate-limited). If listing fails, use <strong>Paste file links</strong>. Refresh uses your unlock password.</p>
         </div>
       </div>
 
@@ -246,7 +246,7 @@
   <dialog id="driveFolderDialog" class="name-dialog">
     <form method="dialog" id="driveFolderForm" class="name-form">
       <h3 id="driveFolderDialogTitle">Add Drive folder</h3>
-      <p class="dialog-hint">Paste a shared folder URL (Anyone with the link · Viewer). No API key.</p>
+      <p class="dialog-hint">Paste a shared folder URL (Anyone with the link · Viewer). No password needed.</p>
       <input type="url" id="driveFolderInput" class="name-input" placeholder="https://drive.google.com/drive/folders/…" autocomplete="off" spellcheck="false" />
       <div class="name-actions">
         <button type="submit" value="cancel" class="btn-text">Cancel</button>
@@ -268,7 +268,7 @@
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>
-  <script src="drive.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+  <script src="drive.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

@@ -180,13 +180,13 @@
   const validateApiKey = async (rawKey) => {
     const key = String(rawKey || "").trim();
     if (!key) {
-      const err = new Error("Enter your Drive API key.");
+      const err = new Error("Enter your password.");
       err.code = "empty";
       throw err;
     }
     // Soft shape check only — real proof is the API response.
     if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(key)) {
-      const err = new Error("That doesn’t look like a Google API key.");
+      const err = new Error("Wrong password.");
       err.code = "shape";
       throw err;
     }
@@ -197,12 +197,12 @@
     try {
       res = await fetch(url);
     } catch (_) {
-      const err = new Error("Could not reach Google Drive. Check your connection.");
+      const err = new Error("Could not check the password. Check your connection.");
       err.code = "network";
       throw err;
     }
     if (res.ok) return true;
-    let message = "That API key didn’t work. Try again.";
+    let message = "Wrong password.";
     try {
       const body = await res.json();
       const apiMsg = body && body.error && body.error.message
@@ -210,15 +210,15 @@
         : "";
       // Surface generic Google messages only — never echo the key.
       if (/API key not valid/i.test(apiMsg)) {
-        message = "That API key isn’t valid.";
+        message = "Wrong password.";
       } else if (/referer|referrer/i.test(apiMsg)) {
-        message = "API key referrer restriction blocked this site.";
+        message = "Wrong password.";
       } else if (/has not been used|not enabled|accessNotConfigured/i.test(apiMsg)) {
-        message = "Enable the Google Drive API for this key’s project.";
+        message = "Wrong password.";
       } else if (res.status === 403) {
-        message = "API key was rejected (403). Check restrictions and Drive API.";
+        message = "Wrong password.";
       } else if (res.status === 400) {
-        message = "That API key isn’t valid.";
+        message = "Wrong password.";
       }
     } catch (_) { /* ignore parse */ }
     const err = new Error(message);
@@ -414,7 +414,7 @@
         );
         if (/Error 403|Forbidden/i.test(html) && !/confirm=/i.test(html)) {
           const e = new Error(
-            "Drive returned 403 Forbidden (cross-site / Sec-Fetch blocked). Unlock with a Drive API key or set a media proxy."
+            "Could not play this item. Check your password or media proxy."
           );
           e.code = "DRIVE_CROSS_SITE_BLOCK";
           e.status = res.status;
@@ -617,7 +617,7 @@
     if (ok) return ok;
 
     const hint =
-      "Unlock with a Drive API key (googleapis alt=media) or set a media proxy — browsers cannot fetch drive.usercontent cross-site (Sec-Fetch 403).";
+      "Unlock with your password or set a media proxy to play this item.";
     const err = new Error(
       (errors[0] || "Could not download Drive audio") + " — " + hint
     );

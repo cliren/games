@@ -95,7 +95,7 @@
     "pl_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 
-  // Unlock = Drive API key stored in localStorage (myMusic.driveApiKey).
+  // Unlock password stored in localStorage (myMusic.driveApiKey).
   // Legacy Hyd+YYYYMM gate key is cleared if present.
   try {
     localStorage.removeItem("myMusic.gate.v1");
@@ -508,11 +508,11 @@
           // Surface a short actionable line in the mini-bar (temporary verbosity).
           let short = "Could not play (Drive)";
           if (code === "DRIVE_CROSS_SITE_BLOCK" || /Sec-Fetch|cross-site/i.test(msg)) {
-            short = "Drive blocked (need API key/proxy)";
+            short = "Drive blocked (check password/proxy)";
           } else if (code === "DRIVE_VIRUS_SCAN") {
             short = "Drive confirm/virus-scan page";
           } else if (code === "DRIVE_API_HTTP" || code === "DRIVE_API_FETCH") {
-            short = "Drive API key failed";
+            short = "Drive access failed";
           } else if (code === "DRIVE_PROXY_FETCH" || code === "DRIVE_PROXY_HTTP") {
             short = "Media proxy failed";
           } else if (msg.length < 64) {
@@ -1335,7 +1335,7 @@
     if (!window.DriveMusic) return;
     if (driveRefreshing) return;
     if (!DriveMusic.getApiKey || !DriveMusic.getApiKey()) {
-      if (!silent) setDriveStatus("Unlock with your Drive API key first.", true);
+      if (!silent) setDriveStatus("Unlock with your password first.", true);
       lockApp();
       return;
     }
@@ -1466,9 +1466,9 @@
   const updateDriveKeyStatus = () => {
     if (!driveKeyStatus || !window.DriveMusic) return;
     if (DriveMusic.getApiKey && DriveMusic.getApiKey()) {
-      driveKeyStatus.textContent = "Playback uses the API key from unlock (stored in this browser).";
+      driveKeyStatus.textContent = "Playback uses the password from unlock (stored in this browser).";
     } else {
-      driveKeyStatus.textContent = "Locked — unlock with your Drive API key to play.";
+      driveKeyStatus.textContent = "Locked — unlock with your password to play.";
     }
   };
 
@@ -1620,7 +1620,7 @@
         startApp();
         updateDriveKeyStatus();
       } catch (err) {
-        setGateError((err && err.message) || "That API key didn’t work. Try again.");
+        setGateError((err && err.message) || "That password didn’t work. Try again.");
         if (gateInput) {
           gateInput.disabled = false;
           gateInput.select();
@@ -1634,7 +1634,7 @@
     });
   }
 
-  // Init — unlock with remembered Drive API key, else show lock screen
+  // Init — unlock with remembered password, else show lock screen
   if (hasRememberedApiKey()) {
     startApp();
   } else {
