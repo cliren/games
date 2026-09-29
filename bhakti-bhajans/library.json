@@ -6,7 +6,8 @@
       "artist": "Bhakthinadham",
       "file": "audio/govindha-nama-smarana-bhakthi-geetham.mp3",
       "category": "bhakti",
-      "dateAdded": "2026-09-28"
+      "dateAdded": "2026-09-28",
+      "source": "local"
     },
     {
       "id": "maha-shiva-gadyam",
@@ -14,7 +15,8 @@
       "artist": "Bhakthinadham",
       "file": "audio/powerful-maha-shiva-gadyam-bhakthinadham.mp3",
       "category": "bhakti",
-      "dateAdded": "2026-09-28"
+      "dateAdded": "2026-09-28",
+      "source": "local"
     }
   ]
 }

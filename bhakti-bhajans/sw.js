@@ -1,13 +1,15 @@
-/* My Music — shell + played-audio cache (static, no backend) */
-const SHELL_CACHE = "my-music-shell-v7";
-const AUDIO_CACHE = "my-music-audio-v7";
+/* My Music — shell cache only for app assets (v8). Same-origin audio may be cached after play; cross-origin Drive media is never intercepted. */
+const SHELL_CACHE = "my-music-shell-v8";
+const AUDIO_CACHE = "my-music-audio-v8";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=7",
+  "./styles.css?v=8",
   "./app.js",
-  "./app.js?v=7",
+  "./app.js?v=8",
+  "./drive.js",
+  "./drive.js?v=8",
   "./library.json",
   "./playlist.json",
 ];
@@ -35,10 +37,11 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
+  // Never try to cache or proxy Google Drive / API audio (CORS, redirects, size).
   if (url.origin !== self.location.origin) return;
 
   const path = url.pathname;
-  const isAudio = /\.(mp3|m4a|ogg|wav|aac)(\?|$)/i.test(path) || path.includes("/audio/");
+  const isAudio = /\.(mp3|m4a|ogg|wav|aac|flac)(\?|$)/i.test(path) || path.includes("/audio/");
 
   if (isAudio) {
     event.respondWith(
@@ -78,6 +81,13 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "CACHE_AUDIO" && event.data.url) {
     const url = event.data.url;
+    let parsed;
+    try {
+      parsed = new URL(url, self.location.href);
+    } catch (_) {
+      return;
+    }
+    if (parsed.origin !== self.location.origin) return;
     caches.open(AUDIO_CACHE).then(async (cache) => {
       const hit = await cache.match(url);
       if (hit) return;

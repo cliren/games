@@ -1179,3 +1179,129 @@ body.gated .name-dialog {
   visibility: hidden;
   pointer-events: none;
 }
+
+
+/* ——— Drive sources ——— */
+.sources-panel {
+  margin: 0 1rem 1.25rem;
+  padding: 0.85rem 1rem 1rem;
+  background: var(--bg-grouped);
+  border-radius: var(--radius);
+}
+
+.sources-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: center;
+}
+
+.sources-status {
+  margin: 0.55rem 0 0.35rem;
+  min-height: 1.2em;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.sources-status.is-error {
+  color: var(--danger);
+}
+
+.drive-folder-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+}
+
+.drive-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--separator);
+}
+
+.drive-folder-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.drive-folder-name {
+  font-size: 0.95rem;
+  font-weight: 560;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drive-folder-url {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drive-folder-remove {
+  flex-shrink: 0;
+}
+
+.sources-empty {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.82rem;
+}
+
+.api-key-label {
+  display: block;
+  margin-top: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.api-key-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  align-items: center;
+}
+
+.api-key-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--separator-strong);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.api-key-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(252, 60, 68, 0.15);
+}
+
+.api-key-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.api-key-hint code {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.dialog-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

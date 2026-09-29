@@ -308,6 +308,8 @@
     if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
     try {
       const url = new URL(file, location.href).href;
+      // Do not cache cross-origin Drive media (CORS / size / opaque responses).
+      if (new URL(url).origin !== location.origin) return;
       navigator.serviceWorker.controller.postMessage({ type: "CACHE_AUDIO", url });
     } catch (_) { /* ignore */ }
   };
@@ -606,8 +608,15 @@
 
 
   const isAudioTrack = (t) => {
-    if (!t || !t.file) return false;
-    return /\.(mp3|m4a|ogg|wav|aac)$/i.test(t.file);
+    if (!t) return false;
+    if (t.source === "drive") return true;
+    if (!t.file) return false;
+    if (/\.(mp3|m4a|ogg|wav|aac|flac)(\?|$)/i.test(t.file)) return true;
+    // Drive uc / usercontent URLs carry id= without an extension in the path
+    if (/drive\.(google|usercontent)\.com/i.test(t.file) || /googleapis\.com\/drive\//i.test(t.file)) {
+      return true;
+    }
+    return false;
   };
 
   const trackMatchesQuery = (track, q) => {
@@ -1100,6 +1109,8 @@
     if (document.body.classList.contains("gated")) return;
     if (e.target.matches("input, textarea, select")) return;
     if (nameDialog.open) return;
+    const driveDlg = document.getElementById("driveFolderDialog");
+    if (driveDlg && driveDlg.open) return;
     if (e.code === "Escape" && !npSheet.hidden) {
       closeSheet();
       return;
@@ -1144,9 +1155,218 @@
     location.reload();
   });
 
+
+  // ——— Google Drive sources ———
+  const driveFolderListEl = document.getElementById("driveFolderList");
+  const driveFoldersEmpty = document.getElementById("driveFoldersEmpty");
+  const driveRefreshStatus = document.getElementById("driveRefreshStatus");
+  const driveApiKeyInput = document.getElementById("driveApiKeyInput");
+  const driveFolderDialog = document.getElementById("driveFolderDialog");
+  const driveFolderInput = document.getElementById("driveFolderInput");
+  const driveFolderForm = document.getElementById("driveFolderForm");
+  let driveRefreshing = false;
+
+  const setDriveStatus = (text, isError) => {
+    if (!driveRefreshStatus) return;
+    driveRefreshStatus.textContent = text || "";
+    driveRefreshStatus.classList.toggle("is-error", !!isError && !!text);
+  };
+
+  const renderDriveFolders = () => {
+    if (!window.DriveMusic || !driveFolderListEl) return;
+    const folders = DriveMusic.loadFolders();
+    driveFolderListEl.innerHTML = "";
+    if (driveFoldersEmpty) {
+      const empty = folders.length === 0;
+      driveFoldersEmpty.classList.toggle("hidden", !empty);
+      driveFoldersEmpty.hidden = !empty;
+    }
+    folders.forEach((folder) => {
+      const li = document.createElement("li");
+      li.className = "drive-folder-row";
+      const meta = document.createElement("div");
+      meta.className = "drive-folder-meta";
+      const name = document.createElement("div");
+      name.className = "drive-folder-name";
+      name.textContent = folder.name || "Drive folder";
+      const url = document.createElement("div");
+      url.className = "drive-folder-url";
+      url.textContent = folder.url || DriveMusic.folderUrl(folder.id);
+      meta.appendChild(name);
+      meta.appendChild(url);
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "btn-text danger drive-folder-remove";
+      rm.textContent = "Remove";
+      rm.setAttribute("aria-label", `Remove folder ${folder.name || folder.id}`);
+      rm.addEventListener("click", () => {
+        DriveMusic.removeFolder(folder.id);
+        // Drop cached tracks that belonged only to this folder, then re-merge
+        const cache = DriveMusic.loadCache();
+        const remaining = (cache.tracks || []).filter(
+          (t) => t.driveFolderId !== folder.id
+        );
+        DriveMusic.saveCache(remaining);
+        applyDriveTracks(remaining);
+        renderDriveFolders();
+        setDriveStatus(`Removed folder. ${remaining.length} Drive track${remaining.length === 1 ? "" : "s"} left.`);
+      });
+      li.appendChild(meta);
+      li.appendChild(rm);
+      driveFolderListEl.appendChild(li);
+    });
+  };
+
+  const applyDriveTracks = (driveTracks) => {
+    const seed = library.filter((t) => t.source !== "drive");
+    const merged = DriveMusic.mergeLibraries(seed, driveTracks || []);
+    library = normalizeTracks(merged);
+    // Refresh playback URLs for drive tracks with current key preference
+    const key = DriveMusic.getApiKey();
+    library = library.map((t) => {
+      if (t.source === "drive" && t.driveFileId) {
+        return { ...t, file: DriveMusic.playbackUrl(t.driveFileId, key) };
+      }
+      return t;
+    });
+    updateHomeCounts();
+    prefetchDurations();
+    if (!views.home.hidden) {
+      /* stay on home */
+    } else if (!views.list.hidden) {
+      renderList();
+    } else if (!views["playlist-detail"].hidden && activePlaylistId) {
+      const pl = playlists.find((p) => p.id === activePlaylistId);
+      if (pl) {
+        renderPlaylistTracks(pl);
+        populateAddSelect(pl);
+      }
+    }
+    // Keep queue ids valid
+    if (queue.length) {
+      const curId = queue[index] && queue[index].id;
+      const refreshed = queue.map((t) => byId(t.id) || t).filter(Boolean);
+      if (refreshed.length) {
+        queue = refreshed;
+        const i = queue.findIndex((t) => t.id === curId);
+        index = i >= 0 ? i : 0;
+      }
+    }
+  };
+
+  const refreshDriveLibrary = async ({ silent } = {}) => {
+    if (!window.DriveMusic) return;
+    if (driveRefreshing) return;
+    const folders = DriveMusic.loadFolders();
+    if (!folders.length) {
+      applyDriveTracks([]);
+      if (!silent) setDriveStatus("Add a Drive folder first.");
+      return;
+    }
+    driveRefreshing = true;
+    setDriveStatus("Refreshing…");
+    const btn = document.getElementById("btnRefreshDrive");
+    if (btn) btn.disabled = true;
+    try {
+      const result = await DriveMusic.refreshAll();
+      applyDriveTracks(result.tracks);
+      renderDriveFolders();
+      const n = result.tracks.length;
+      const errN = result.errors.length;
+      if (errN && !n) {
+        setDriveStatus(result.errors[0].message, true);
+      } else if (errN) {
+        setDriveStatus(
+          `Loaded ${n} Drive track${n === 1 ? "" : "s"}; ${errN} folder error${errN === 1 ? "" : "s"}.`,
+          true
+        );
+      } else {
+        setDriveStatus(
+          `Loaded ${n} Drive track${n === 1 ? "" : "s"} from ${result.folders.length} folder${result.folders.length === 1 ? "" : "s"}.`
+        );
+      }
+    } catch (err) {
+      setDriveStatus(err.message || String(err), true);
+    } finally {
+      driveRefreshing = false;
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  const openDriveFolderDialog = () => {
+    if (!driveFolderDialog || !driveFolderInput) return;
+    driveFolderInput.value = "";
+    if (typeof driveFolderDialog.showModal === "function") {
+      driveFolderDialog.showModal();
+      driveFolderInput.focus();
+    } else {
+      const v = window.prompt("Paste a Google Drive folder URL");
+      if (v) handleAddDriveFolder(v);
+    }
+  };
+
+  const handleAddDriveFolder = async (raw) => {
+    if (!window.DriveMusic) return;
+    try {
+      const { folder, added } = DriveMusic.addFolder(raw);
+      renderDriveFolders();
+      if (!added) {
+        setDriveStatus("That folder is already in your list.");
+        return;
+      }
+      setDriveStatus(`Added folder${folder.name ? ` “${folder.name}”` : ""}. Refreshing…`);
+      await refreshDriveLibrary();
+    } catch (err) {
+      setDriveStatus(err.message || String(err), true);
+    }
+  };
+
+  if (driveFolderForm) {
+    driveFolderForm.addEventListener("submit", (e) => {
+      const submitter = e.submitter;
+      const ok = submitter && submitter.value === "ok";
+      const val = ok && driveFolderInput ? driveFolderInput.value.trim() : "";
+      // method=dialog closes automatically; handle after
+      if (ok && val) {
+        // defer until dialog closes
+        setTimeout(() => handleAddDriveFolder(val), 0);
+      }
+    });
+  }
+
+  const btnAddDriveFolder = document.getElementById("btnAddDriveFolder");
+  if (btnAddDriveFolder) btnAddDriveFolder.addEventListener("click", openDriveFolderDialog);
+  const btnRefreshDrive = document.getElementById("btnRefreshDrive");
+  if (btnRefreshDrive) btnRefreshDrive.addEventListener("click", () => refreshDriveLibrary());
+  const btnSaveApiKey = document.getElementById("btnSaveApiKey");
+  if (btnSaveApiKey) {
+    btnSaveApiKey.addEventListener("click", () => {
+      if (!window.DriveMusic) return;
+      DriveMusic.setApiKey(driveApiKeyInput ? driveApiKeyInput.value : "");
+      setDriveStatus(DriveMusic.getApiKey() ? "API key saved. Tap Refresh library." : "API key cleared.");
+      // Update playback URLs if key changed
+      applyDriveTracks(DriveMusic.loadCache().tracks || []);
+    });
+  }
+
+  const initDriveUi = () => {
+    if (!window.DriveMusic) return;
+    if (driveApiKeyInput) driveApiKeyInput.value = DriveMusic.getApiKey();
+    renderDriveFolders();
+    const cache = DriveMusic.loadCache();
+    if (cache.tracks && cache.tracks.length) {
+      applyDriveTracks(cache.tracks);
+      const when = cache.refreshedAt ? ` · cached ${cache.refreshedAt.slice(0, 10)}` : "";
+      setDriveStatus(`${cache.tracks.length} Drive track${cache.tracks.length === 1 ? "" : "s"}${when}`);
+    } else if (DriveMusic.loadFolders().length) {
+      // Auto-refresh when folders configured but cache empty
+      refreshDriveLibrary({ silent: true });
+    }
+  };
+
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=7").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=8").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
@@ -1159,13 +1379,24 @@
       file: t.file,
       category: t.category || "other",
       dateAdded: t.dateAdded || "2026-09-28",
+      source: t.source || (String(t.id || "").startsWith("drive_") ? "drive" : "local"),
+      driveFileId: t.driveFileId || null,
+      driveFolderId: t.driveFolderId || null,
     }));
 
   const boot = (tracks) => {
-    library = normalizeTracks(tracks);
+    const seeds = normalizeTracks(tracks).map((t) => ({ ...t, source: t.source || "local" }));
+    let driveTracks = [];
+    if (window.DriveMusic) {
+      driveTracks = DriveMusic.loadCache().tracks || [];
+    }
+    library = normalizeTracks(
+      window.DriveMusic ? DriveMusic.mergeLibraries(seeds, driveTracks) : seeds
+    );
     updateHomeCounts();
     showView("home");
     prefetchDurations();
+    initDriveUi();
 
     let startId = null;
     try {
