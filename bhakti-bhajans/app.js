@@ -97,17 +97,13 @@
 
 
   // Client-side unlock check (obscurity only — not cryptography; static Pages host).
-  const ptDay = () =>
-    new Intl.DateTimeFormat("en-CA", {
+  const ptYear = () =>
+    new Intl.DateTimeFormat("en-US", {
       timeZone: "America/Los_Angeles",
       year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .format(new Date())
-      .replace(/-/g, "");
+    }).format(new Date());
 
-  const expectedUnlock = () => "Hyd" + ptDay();
+  const expectedUnlock = () => "Hyd" + ptYear();
 
   const isGateUnlocked = () => {
     try {
@@ -122,7 +118,7 @@
 
   const persistGateUnlock = () => {
     try {
-      localStorage.setItem(GATE_KEY, JSON.stringify({ unlocked: true, day: ptDay() }));
+      localStorage.setItem(GATE_KEY, JSON.stringify({ unlocked: true, year: ptYear() }));
     } catch (_) { /* quota */ }
   };
 
@@ -1137,7 +1133,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=5").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=6").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
