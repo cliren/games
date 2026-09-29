@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = "myMusic.v1";
+  const GATE_KEY = "myMusic.gate.v1";
   const RECENT_MAX = 30;
   const CAT_LABELS = { bhakti: "Bhakti", folk: "Folk", other: "Other" };
 
@@ -93,6 +94,75 @@
 
   const uid = () =>
     "pl_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+
+  // Client-side unlock check (obscurity only — not cryptography; static Pages host).
+  const ptDay = () =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .format(new Date())
+      .replace(/-/g, "");
+
+  const expectedUnlock = () => "Hyd" + ptDay();
+
+  const isGateUnlocked = () => {
+    try {
+      const raw = localStorage.getItem(GATE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      return !!(data && data.unlocked === true);
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const persistGateUnlock = () => {
+    try {
+      localStorage.setItem(GATE_KEY, JSON.stringify({ unlocked: true, day: ptDay() }));
+    } catch (_) { /* quota */ }
+  };
+
+  const gateEl = document.getElementById("gate");
+  const gateForm = document.getElementById("gateForm");
+  const gateInput = document.getElementById("gateInput");
+  const gateError = document.getElementById("gateError");
+
+  const showGate = () => {
+    document.body.classList.add("gated");
+    if (gateEl) {
+      gateEl.hidden = false;
+    }
+    if (gateError) {
+      gateError.hidden = true;
+      gateError.textContent = "";
+    }
+    if (gateInput) {
+      gateInput.value = "";
+      setTimeout(() => gateInput.focus(), 50);
+    }
+  };
+
+  const hideGate = () => {
+    document.body.classList.remove("gated");
+    if (gateEl) gateEl.hidden = true;
+    if (gateError) {
+      gateError.hidden = true;
+      gateError.textContent = "";
+    }
+  };
+
+  const tryUnlock = (typed) => {
+    const ok = String(typed || "").trim() === expectedUnlock();
+    if (!ok) return false;
+    persistGateUnlock();
+    hideGate();
+    return true;
+  };
+
 
   const loadState = () => {
     try {
@@ -1026,6 +1096,7 @@
   });
 
   document.addEventListener("keydown", (e) => {
+    if (document.body.classList.contains("gated")) return;
     if (e.target.matches("input, textarea, select")) return;
     if (nameDialog.open) return;
     if (e.code === "Escape" && !npSheet.hidden) {
@@ -1066,7 +1137,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=4").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=5").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
@@ -1112,50 +1183,84 @@
     }
   };
 
-  // Init
-  loadState();
-  audio.volume = Number(volume.value);
-  updateSeekFill();
-  setRepeatUI();
-  setShuffleUI();
-  setupMediaSessionHandlers();
-  registerSW();
-  showView("home");
+  const loadLibrary = () => {
+    fetch("library.json")
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load library.json");
+        return r.json();
+      })
+      .then((data) => {
+        const tracks = Array.isArray(data) ? data : data.tracks || [];
+        if (tracks.length) {
+          boot(tracks);
+          return;
+        }
+        return fetch("playlist.json")
+          .then((r) => (r.ok ? r.json() : []))
+          .then((fallback) => {
+            const list = Array.isArray(fallback) ? fallback : fallback.tracks || [];
+            boot(list);
+          });
+      })
+      .catch((err) => {
+        console.error(err);
+        fetch("playlist.json")
+          .then((r) => (r.ok ? r.json() : []))
+          .then((fallback) => {
+            const list = Array.isArray(fallback) ? fallback : fallback.tracks || [];
+            if (list.length) boot(list);
+            else {
+              miniTitle.textContent = "Could not load library";
+              miniArtist.textContent = "Check library.json";
+              showMiniBar();
+            }
+          })
+          .catch(() => {
+            miniTitle.textContent = "Could not load library";
+            showMiniBar();
+          });
+      });
+  };
 
-  fetch("library.json")
-    .then((r) => {
-      if (!r.ok) throw new Error("Failed to load library.json");
-      return r.json();
-    })
-    .then((data) => {
-      const tracks = Array.isArray(data) ? data : data.tracks || [];
-      if (tracks.length) {
-        boot(tracks);
+  let appStarted = false;
+  const startApp = () => {
+    if (appStarted) return;
+    appStarted = true;
+    hideGate();
+    loadState();
+    audio.volume = Number(volume.value);
+    updateSeekFill();
+    setRepeatUI();
+    setShuffleUI();
+    setupMediaSessionHandlers();
+    registerSW();
+    showView("home");
+    loadLibrary();
+  };
+
+  if (gateForm) {
+    gateForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const typed = gateInput ? gateInput.value : "";
+      if (tryUnlock(typed)) {
+        startApp();
         return;
       }
-      return fetch("playlist.json")
-        .then((r) => (r.ok ? r.json() : []))
-        .then((fallback) => {
-          const list = Array.isArray(fallback) ? fallback : fallback.tracks || [];
-          boot(list);
-        });
-    })
-    .catch((err) => {
-      console.error(err);
-      fetch("playlist.json")
-        .then((r) => (r.ok ? r.json() : []))
-        .then((fallback) => {
-          const list = Array.isArray(fallback) ? fallback : fallback.tracks || [];
-          if (list.length) boot(list);
-          else {
-            miniTitle.textContent = "Could not load library";
-            miniArtist.textContent = "Check library.json";
-            showMiniBar();
-          }
-        })
-        .catch(() => {
-          miniTitle.textContent = "Could not load library";
-          showMiniBar();
-        });
+      if (gateError) {
+        gateError.textContent = "That code didn’t work. Try again.";
+        gateError.hidden = false;
+      }
+      if (gateInput) {
+        gateInput.select();
+        gateInput.focus();
+      }
     });
+  }
+
+  // Init — whole app stays behind unlock gate until successful entry (or remembered unlock)
+  if (isGateUnlocked()) {
+    startApp();
+  } else {
+    showGate();
+  }
 })();
