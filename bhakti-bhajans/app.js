@@ -106,6 +106,7 @@
   const gateInput = document.getElementById("gateInput");
   const gateError = document.getElementById("gateError");
   const gateUnlockBtn = document.getElementById("gateUnlock");
+  const gateTogglePw = document.getElementById("gateTogglePw");
 
   const hasRememberedApiKey = () =>
     !!(window.DriveMusic && DriveMusic.getApiKey && DriveMusic.getApiKey());
@@ -126,7 +127,17 @@
     if (gateInput) {
       gateInput.value = "";
       gateInput.disabled = false;
+      gateInput.type = "password";
       setTimeout(() => gateInput.focus(), 50);
+    }
+    if (gateTogglePw) {
+      gateTogglePw.setAttribute("aria-pressed", "false");
+      gateTogglePw.setAttribute("aria-label", "Show password");
+      gateTogglePw.title = "Show password";
+      const showIcon = gateTogglePw.querySelector(".gate-eye-show");
+      const hideIcon = gateTogglePw.querySelector(".gate-eye-hide");
+      if (showIcon) showIcon.hidden = false;
+      if (hideIcon) hideIcon.hidden = true;
     }
   };
 
@@ -1507,7 +1518,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=14").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=16").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
@@ -1597,6 +1608,25 @@
     showView("home");
     loadLibrary();
   };
+
+  if (gateTogglePw && gateInput) {
+    gateTogglePw.addEventListener("click", () => {
+      const showing = gateInput.type === "text";
+      gateInput.type = showing ? "password" : "text";
+      const nowShowing = gateInput.type === "text";
+      gateTogglePw.setAttribute("aria-pressed", nowShowing ? "true" : "false");
+      gateTogglePw.setAttribute(
+        "aria-label",
+        nowShowing ? "Hide password" : "Show password"
+      );
+      gateTogglePw.title = nowShowing ? "Hide password" : "Show password";
+      const showIcon = gateTogglePw.querySelector(".gate-eye-show");
+      const hideIcon = gateTogglePw.querySelector(".gate-eye-hide");
+      if (showIcon) showIcon.hidden = nowShowing;
+      if (hideIcon) hideIcon.hidden = !nowShowing;
+      gateInput.focus();
+    });
+  }
 
   if (gateForm) {
     gateForm.addEventListener("submit", async (e) => {

@@ -174,8 +174,11 @@
   };
 
   /**
-   * Lightweight Drive API check (files.list pageSize=1).
-   * Does not log the key. Resolves true on success; throws a safe Error on failure.
+   * Prove the unlock password is accepted by Google Drive without needing
+   * private library listing (API-key-only files.list often 403s with
+   * insufficientFilePermissions even for a valid key — that must unlock).
+   * Uses files.get on a sentinel id: 404 = key accepted; never logs the key.
+   * User-facing messages stay password-only (never say "API key").
    */
   const validateApiKey = async (rawKey) => {
     const key = String(rawKey || "").trim();
@@ -190,39 +193,94 @@
       err.code = "shape";
       throw err;
     }
+    // Sentinel files.get: valid key → 404 (or 200); invalid → 400 API_KEY_INVALID.
+    // Keep default referrer so HTTP-referrer-restricted passwords work on this origin.
     const url =
-      "https://www.googleapis.com/drive/v3/files?pageSize=1&fields=files(id)&key=" +
+      "https://www.googleapis.com/drive/v3/files/__my_music_key_check__?fields=id&key=" +
       encodeURIComponent(key);
     let res;
     try {
-      res = await fetch(url);
+      res = await fetch(url, { method: "GET", mode: "cors", credentials: "omit" });
     } catch (_) {
-      const err = new Error("Could not check the password. Check your connection.");
+      const err = new Error(
+        "Could not check the password. Check your connection and try again."
+      );
       err.code = "network";
       throw err;
     }
-    if (res.ok) return true;
-    let message = "Wrong password.";
+    // Auth worked: file missing is expected; empty/private library must still unlock.
+    if (res.ok || res.status === 404) return true;
+
+    let apiMsg = "";
+    let apiReason = "";
     try {
       const body = await res.json();
-      const apiMsg = body && body.error && body.error.message
-        ? String(body.error.message)
-        : "";
-      // Surface generic Google messages only — never echo the key.
-      if (/API key not valid/i.test(apiMsg)) {
-        message = "Wrong password.";
-      } else if (/referer|referrer/i.test(apiMsg)) {
-        message = "Wrong password.";
-      } else if (/has not been used|not enabled|accessNotConfigured/i.test(apiMsg)) {
-        message = "Wrong password.";
-      } else if (res.status === 403) {
-        message = "Wrong password.";
-      } else if (res.status === 400) {
-        message = "Wrong password.";
+      const errObj = body && body.error ? body.error : null;
+      if (errObj) {
+        apiMsg = String(errObj.message || "");
+        const first =
+          errObj.errors && errObj.errors[0] && errObj.errors[0].reason
+            ? String(errObj.errors[0].reason)
+            : "";
+        apiReason = first || String(errObj.status || "");
+        const details = Array.isArray(errObj.details) ? errObj.details : [];
+        for (const d of details) {
+          if (d && d.reason) {
+            apiReason = String(d.reason);
+            break;
+          }
+        }
       }
     } catch (_) { /* ignore parse */ }
+
+    const combined = (apiMsg + " " + apiReason).trim();
+
+    // Key accepted: sentinel missing, or list denied without OAuth (empty/private Drive).
+    if (
+      /insufficientFilePermissions|insufficientPermissions/i.test(combined) ||
+      (/notFound/i.test(apiReason) || /File not found/i.test(apiMsg))
+    ) {
+      return true;
+    }
+
+    let message = "Wrong password.";
+    let code = "http_" + res.status;
+
+    if (
+      /API_KEY_INVALID|API key not valid/i.test(combined) ||
+      (res.status === 400 && /INVALID_ARGUMENT|badRequest/i.test(combined))
+    ) {
+      message = "Wrong password.";
+      code = "invalid";
+    } else if (/API_KEY_HTTP_REFERRER_BLOCKED|referer|referrer/i.test(combined)) {
+      message =
+        "Password check was blocked by site settings. Ask the admin to allow this site.";
+      code = "referrer";
+    } else if (
+      /has not been used|not enabled|accessNotConfigured|SERVICE_DISABLED|API_KEY_SERVICE_BLOCKED/i.test(
+        combined
+      )
+    ) {
+      message = "Password service isn’t ready yet. Try again later.";
+      code = "not_enabled";
+    } else if (/API_KEY_IP_ADDRESS_BLOCKED|ip address/i.test(combined)) {
+      message =
+        "Password check was blocked from this network. Try another connection.";
+      code = "ip_blocked";
+    } else if (res.status === 403) {
+      message =
+        "Password check was blocked. Check connection or site settings and try again.";
+      code = "forbidden";
+    } else if (res.status >= 500) {
+      message = "Could not check the password right now. Try again in a moment.";
+      code = "server";
+    } else if (res.status === 400) {
+      message = "Wrong password.";
+      code = "invalid";
+    }
+
     const err = new Error(message);
-    err.code = "http_" + res.status;
+    err.code = code;
     throw err;
   };
 
@@ -371,14 +429,17 @@
     return objectUrl;
   };
 
-  const fetchArrayBuffer = async (url, { signal } = {}) => {
-    const res = await fetch(url, {
+  const fetchArrayBuffer = async (url, { signal, stripReferrer } = {}) => {
+    // Default: send referrer so HTTP-referrer-restricted unlock passwords work
+    // on googleapis. Strip only for usercontent (no key auth).
+    const opts = {
       method: "GET",
       mode: "cors",
       credentials: "omit",
-      referrerPolicy: "no-referrer",
       signal,
-    });
+    };
+    if (stripReferrer) opts.referrerPolicy = "no-referrer";
+    const res = await fetch(url, opts);
     return res;
   };
 
@@ -392,7 +453,7 @@
       const url = usercontentUrl(fileId, confirm);
       let res;
       try {
-        res = await fetchArrayBuffer(url, { signal });
+        res = await fetchArrayBuffer(url, { signal, stripReferrer: true });
       } catch (err) {
         const e = new Error(
           `Drive usercontent fetch failed (${err && err.message ? err.message : "network"}). Google blocks cross-site browser downloads.`

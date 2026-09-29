@@ -1112,6 +1112,11 @@ body.sheet-open {
   text-align: left;
 }
 
+.gate-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .gate-input {
   width: 100%;
   font: inherit;
@@ -1120,7 +1125,7 @@ body.sheet-open {
   background: var(--bg-grouped);
   border: 1px solid var(--separator);
   border-radius: 12px;
-  padding: 0.75rem 0.9rem;
+  padding: 0.75rem 2.75rem 0.75rem 0.9rem;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -1130,6 +1135,41 @@ body.sheet-open {
   border-color: var(--pink);
   box-shadow: 0 0 0 3px rgba(252, 60, 68, 0.14);
   background: var(--bg);
+}
+
+.gate-toggle-pw {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #6e6e73);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gate-toggle-pw:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.gate-toggle-pw:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 1px;
+}
+
+.gate-toggle-pw .gate-eye-hide[hidden],
+.gate-toggle-pw .gate-eye-show[hidden] {
+  display: none;
 }
 
 .gate-btn {
