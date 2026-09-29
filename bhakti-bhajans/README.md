@@ -1,24 +1,25 @@
 # My Music
 
-Ad-free static music library for GitHub Pages. Plays MP3s hosted in this folder — no YouTube, no ads, no tracking. URL path stays `bhakti-bhajans/` for stability; the UI is branded **My Music**.
+Ad-free static music library for GitHub Pages. Apple Music–like **Library** home with a bottom mini-bar and Now Playing sheet. Plays MP3s hosted in this folder — no YouTube, no ads, no tracking. URL path stays `bhakti-bhajans/` for stability; the UI is branded **My Music**.
 
 **Live:** https://cliren.github.io/games/bhakti-bhajans/
 
 ## Features
 
-- **Library** with quiet Category / Sort selects (All / Bhakti / Folk / Other · Name / Date)
-- Standalone My Music UI (no Games breadcrumb); hub tile on the games index still links here
-- **Repair / refresh** control clears service worker + caches if playback looks stale
-- **Shuffle** and **repeat** (off / all / one)
-- **Custom playlists** — create, rename, delete; add/remove tracks; reorder with ↑↓ (stored in `localStorage`)
-- **Recently played** (last 30, `localStorage`)
-- Big Play control, filled scrubber, Media Session (lock screen / headset)
-- **Offline-ready:** service worker (`my-music-shell-v2` / `my-music-audio-v2`) caches the shell and each audio file on first play; loads `library.json` with fallback to `playlist.json`
+- **Library home** — destination rows: Playlists, Songs, Recently Played, then Categories (Bhakti / Folk / Other)
+- **Bottom mini-bar** + tap → **Now Playing** sheet (seek, prev/next, shuffle, repeat)
+- **Sort** Name | Date on list screens
+- **Shuffle** on lists ≥2 and on Now Playing; **repeat** off / all / one
+- **Custom playlists** — create, rename, delete; add/remove/reorder (`localStorage` `myMusic.v1`)
+- **Recently played** (last 30)
+- Media Session (lock screen / headset)
+- Service worker caches shell + audio after play (`Ad-free · Remote`)
 - Keyboard: `Space` play/pause, `←`/`→` seek 5s, `Shift+←`/`→` prev/next
+- Discreet **Repair** control clears SW/caches and reloads
 
 ## Data
 
-Tracks live in `library.json` (also mirrored in `playlist.json` for compatibility):
+Tracks live in `library.json` (mirrored in `playlist.json` for fallback):
 
 ```json
 {
@@ -37,8 +38,6 @@ Tracks live in `library.json` (also mirrored in `playlist.json` for compatibilit
 
 `category` must be `bhakti`, `folk`, or `other`.
 
-User playlists, recently played, and prefs (sort, shuffle, repeat, last track, volume) stay in the browser — nothing is uploaded.
-
 ## How to add songs
 
 1. Drop an MP3 into `audio/` (ASCII filenames preferred).
@@ -56,7 +55,7 @@ Open http://localhost:8080 — HTTPS or localhost is needed for the service work
 
 ## Stack
 
-Plain HTML, CSS, and vanilla JavaScript. No build step, no frameworks, no CDN fonts, no ads.
+Plain HTML, CSS, and vanilla JavaScript. No build step, no frameworks, no CDN fonts, no ads. Light Apple Music–inspired theme.
 
 ## License
 

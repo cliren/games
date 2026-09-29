@@ -1,11 +1,13 @@
 /* My Music — shell + played-audio cache (static, no backend) */
-const SHELL_CACHE = "my-music-shell-v2";
-const AUDIO_CACHE = "my-music-audio-v2";
+const SHELL_CACHE = "my-music-shell-v3";
+const AUDIO_CACHE = "my-music-audio-v3";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
+  "./styles.css?v=3",
   "./app.js",
+  "./app.js?v=3",
   "./library.json",
   "./playlist.json",
 ];
@@ -57,7 +59,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Shell / JSON: network-first with cache fallback (so library updates land)
+  // Shell / JSON: network-first with cache fallback
   event.respondWith(
     fetch(req)
       .then((res) => {

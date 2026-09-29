@@ -2,163 +2,169 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="My Music — Remote · Ad-free · Offline-ready. No tracking." />
-  <meta name="theme-color" content="#0c0a0f" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="My Music — Ad-free · Remote. No tracking." />
+  <meta name="theme-color" content="#ffffff" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="My Music" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css?v=2" />
+  <link rel="stylesheet" href="styles.css?v=3" />
 </head>
 <body>
-  <main class="app">
-    <header class="header">
-      <div class="header-row">
-        <div class="header-text">
-          <h1>My Music</h1>
-          <p class="tagline">Remote · Ad-free · Offline-ready</p>
-        </div>
-        <button type="button" id="btnRepair" class="btn-repair" title="Unregister service worker, clear caches, and reload">Repair / refresh</button>
-      </div>
-    </header>
+  <main class="app" id="app">
+    <!-- LIBRARY HOME -->
+    <section id="viewHome" class="view view-home" data-view="home">
+      <header class="lib-header">
+        <h1 class="lib-title">My Music</h1>
+        <p class="lib-subtitle">Ad-free · Remote</p>
+        <button type="button" id="btnRepair" class="repair-btn" title="Clear caches and reload" aria-label="Repair">Repair</button>
+      </header>
 
-    <section class="player-card" aria-label="Now playing">
-      <div class="now-playing" aria-live="polite">
-        <div class="art" id="art">
-          <span class="art-glyph" id="artGlyph" aria-hidden="true">♪</span>
-        </div>
-        <div class="meta">
-          <h2 id="trackTitle">Loading…</h2>
-          <p id="trackArtist">—</p>
-          <p id="trackCategory" class="track-cat-label"></p>
-        </div>
-      </div>
+      <nav class="dest-list" aria-label="Library">
+        <button type="button" class="dest-row" data-nav="playlists">
+          <span class="dest-label">Playlists</span>
+          <span class="dest-chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="dest-row" data-nav="songs">
+          <span class="dest-label">Songs</span>
+          <span class="dest-chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="dest-row" data-nav="recent">
+          <span class="dest-label">Recently Played</span>
+          <span class="dest-chevron" aria-hidden="true">›</span>
+        </button>
+      </nav>
 
-      <div class="controls" aria-label="Playback controls">
-        <div class="seek-row">
-          <span id="currentTime" class="time">0:00</span>
-          <div class="seek-wrap">
-            <input
-              type="range"
-              id="seek"
-              class="seek"
-              min="0"
-              max="1000"
-              value="0"
-              step="1"
-              aria-label="Seek"
-            />
-          </div>
-          <span id="duration" class="time">0:00</span>
-        </div>
-
-        <div class="buttons">
-          <button type="button" id="btnShuffle" class="btn btn-icon" aria-label="Shuffle off" title="Shuffle" aria-pressed="false">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
-          </button>
-          <button type="button" id="btnPrev" class="btn btn-icon" aria-label="Previous track" title="Previous (Shift+←)">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
-          </button>
-          <button type="button" id="btnPlay" class="btn btn-play" aria-label="Play" title="Play (Space)">
-            <svg id="iconPlay" viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7L8 5z"/></svg>
-            <svg id="iconPause" class="hidden" viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
-          </button>
-          <button type="button" id="btnNext" class="btn btn-icon" aria-label="Next track" title="Next (Shift+→)">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
-          </button>
-          <button type="button" id="btnRepeat" class="btn btn-icon btn-repeat" aria-label="Repeat off" title="Repeat: off" data-mode="off">
-            <svg id="iconRepeat" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
-            <span id="repeatBadge" class="repeat-badge hidden" aria-hidden="true">1</span>
-          </button>
-        </div>
-
-        <div class="volume-row">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1-3.29-2.5-4.03v8.05c1.5-.74 2.5-2.26 2.5-4.02z"/></svg>
-          <input
-            type="range"
-            id="volume"
-            class="volume"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.9"
-            aria-label="Volume"
-          />
-        </div>
-      </div>
+      <h2 class="section-label">Categories</h2>
+      <nav class="dest-list" aria-label="Categories">
+        <button type="button" class="dest-row" data-nav="category" data-category="bhakti">
+          <span class="dest-label">Bhakti</span>
+          <span class="dest-meta" id="countBhakti"></span>
+          <span class="dest-chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="dest-row" data-nav="category" data-category="folk">
+          <span class="dest-label">Folk</span>
+          <span class="dest-meta" id="countFolk"></span>
+          <span class="dest-chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="dest-row" data-nav="category" data-category="other">
+          <span class="dest-label">Other</span>
+          <span class="dest-meta" id="countOther"></span>
+          <span class="dest-chevron" aria-hidden="true">›</span>
+        </button>
+      </nav>
     </section>
 
-    <nav class="tabs" role="tablist" aria-label="Library sections">
-      <button type="button" class="tab active" role="tab" id="tabLibrary" data-tab="library" aria-selected="true">Library</button>
-      <button type="button" class="tab" role="tab" id="tabPlaylists" data-tab="playlists" aria-selected="false">Playlists</button>
-      <button type="button" class="tab" role="tab" id="tabRecent" data-tab="recent" aria-selected="false">Recent</button>
-    </nav>
-
-    <section id="panelLibrary" class="panel" role="tabpanel" aria-labelledby="tabLibrary">
-      <div class="toolbar toolbar-quiet">
-        <label class="filter-label" for="categorySelect">
-          <span class="filter-caption">Category</span>
-          <select id="categorySelect" class="filter-select" aria-label="Category">
-            <option value="all">All</option>
-            <option value="bhakti">Bhakti</option>
-            <option value="folk">Folk</option>
-            <option value="other">Other</option>
-          </select>
-        </label>
-        <label class="filter-label" for="sortSelect">
-          <span class="filter-caption">Sort</span>
-          <select id="sortSelect" class="filter-select" aria-label="Sort tracks">
-            <option value="name">Name</option>
-            <option value="date">Date</option>
-          </select>
-        </label>
-      </div>
-      <div class="list-header">
-        <h3>Tracks</h3>
-        <span id="trackCount" class="count"></span>
-      </div>
-      <ul id="trackList" class="track-list" role="list"></ul>
-    </section>
-
-    <section id="panelPlaylists" class="panel hidden" role="tabpanel" aria-labelledby="tabPlaylists" hidden>
-      <div class="toolbar toolbar-playlists">
-        <button type="button" id="btnNewPlaylist" class="btn-text">+ New playlist</button>
-      </div>
-      <div id="playlistBrowser" class="playlist-browser">
-        <ul id="playlistList" class="playlist-list" role="list"></ul>
-      </div>
-      <div id="playlistDetail" class="playlist-detail hidden" hidden>
-        <div class="list-header playlist-detail-header">
-          <button type="button" id="btnBackPlaylists" class="btn-text back-inline">‹ Playlists</button>
-          <h3 id="playlistDetailName">Playlist</h3>
-          <div class="playlist-actions">
-            <button type="button" id="btnRenamePlaylist" class="btn-text" title="Rename">Rename</button>
-            <button type="button" id="btnDeletePlaylist" class="btn-text danger" title="Delete">Delete</button>
-          </div>
+    <!-- DRILL-IN: Songs / Category / Recent -->
+    <section id="viewList" class="view view-list hidden" data-view="list" hidden>
+      <header class="drill-header">
+        <button type="button" id="btnBackLibrary" class="back-btn">‹ Library</button>
+        <h1 class="drill-title" id="listTitle">Songs</h1>
+        <button type="button" id="btnShuffleList" class="header-action hidden" hidden aria-label="Shuffle play">Shuffle</button>
+      </header>
+      <div class="list-toolbar" id="listToolbar">
+        <div class="sort-seg" role="group" aria-label="Sort">
+          <button type="button" class="sort-btn active" data-sort="name">Name</button>
+          <button type="button" class="sort-btn" data-sort="date">Date</button>
         </div>
-        <div class="add-track-row">
-          <select id="addTrackSelect" class="filter-select add-select" aria-label="Add track to playlist">
-            <option value="">Add track…</option>
-          </select>
-          <button type="button" id="btnAddTrack" class="btn-text">Add</button>
-        </div>
-        <ul id="playlistTracks" class="track-list" role="list"></ul>
+        <span class="list-count" id="listCount"></span>
       </div>
+      <ul id="songList" class="track-list" role="list"></ul>
+      <p id="listEmpty" class="empty-hint hidden" hidden>No songs yet.</p>
     </section>
 
-    <section id="panelRecent" class="panel hidden" role="tabpanel" aria-labelledby="tabRecent" hidden>
-      <div class="list-header">
-        <h3>Recently played</h3>
-        <span id="recentCount" class="count"></span>
-      </div>
-      <ul id="recentList" class="track-list" role="list"></ul>
-      <p id="recentEmpty" class="empty-hint hidden">Play a track and it will show up here.</p>
+    <!-- DRILL-IN: Playlists browser -->
+    <section id="viewPlaylists" class="view view-playlists hidden" data-view="playlists" hidden>
+      <header class="drill-header">
+        <button type="button" id="btnBackFromPlaylists" class="back-btn">‹ Library</button>
+        <h1 class="drill-title">Playlists</h1>
+        <button type="button" id="btnNewPlaylist" class="header-action" aria-label="New playlist">+</button>
+      </header>
+      <ul id="playlistList" class="playlist-list" role="list"></ul>
+      <p id="playlistsEmpty" class="empty-hint hidden" hidden>Create a playlist to organize your library.</p>
     </section>
 
-    <footer class="app-footer">
-      <button type="button" id="btnRepairFooter" class="btn-repair btn-repair-footer" title="Unregister service worker, clear caches, and reload">Repair / refresh app</button>
-    </footer>
+    <!-- DRILL-IN: Playlist detail -->
+    <section id="viewPlaylistDetail" class="view view-playlist-detail hidden" data-view="playlist-detail" hidden>
+      <header class="drill-header">
+        <button type="button" id="btnBackPlaylists" class="back-btn">‹ Playlists</button>
+        <h1 class="drill-title" id="playlistDetailName">Playlist</h1>
+        <button type="button" id="btnShufflePlaylist" class="header-action hidden" hidden aria-label="Shuffle play">Shuffle</button>
+      </header>
+      <div class="playlist-actions-bar">
+        <button type="button" id="btnRenamePlaylist" class="btn-text">Rename</button>
+        <button type="button" id="btnDeletePlaylist" class="btn-text danger">Delete</button>
+      </div>
+      <div class="add-track-row">
+        <select id="addTrackSelect" class="add-select" aria-label="Add track to playlist">
+          <option value="">Add track…</option>
+        </select>
+        <button type="button" id="btnAddTrack" class="btn-text">Add</button>
+      </div>
+      <ul id="playlistTracks" class="track-list" role="list"></ul>
+      <p id="playlistEmpty" class="empty-hint hidden" hidden>No tracks yet. Add one above.</p>
+    </section>
   </main>
+
+  <!-- BOTTOM MINI-BAR -->
+  <div id="miniBar" class="mini-bar" role="button" tabindex="0" aria-label="Now playing — tap to expand" hidden>
+    <div class="mini-progress" aria-hidden="true"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
+    <div class="mini-inner">
+      <div class="mini-art" aria-hidden="true"><span>♪</span></div>
+      <div class="mini-meta">
+        <div class="mini-title" id="miniTitle">Choose something to play</div>
+        <div class="mini-artist" id="miniArtist"></div>
+      </div>
+      <button type="button" id="miniPlay" class="mini-play" aria-label="Play">
+        <svg id="miniIconPlay" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7L8 5z"/></svg>
+        <svg id="miniIconPause" class="hidden" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- NOW PLAYING SHEET -->
+  <div id="nowPlayingSheet" class="np-sheet" hidden aria-hidden="true">
+    <div class="np-backdrop" id="npBackdrop"></div>
+    <div class="np-panel" role="dialog" aria-modal="true" aria-label="Now Playing">
+      <button type="button" id="npClose" class="np-close" aria-label="Close">✕</button>
+      <div class="np-art" id="npArt" aria-hidden="true"><span class="np-glyph">♪</span></div>
+      <div class="np-meta">
+        <h2 id="npTitle">—</h2>
+        <p id="npArtist">—</p>
+        <p id="npCategory" class="np-cat"></p>
+      </div>
+      <div class="seek-row">
+        <span id="currentTime" class="time">0:00</span>
+        <div class="seek-wrap">
+          <input type="range" id="seek" class="seek" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+        </div>
+        <span id="duration" class="time">0:00</span>
+      </div>
+      <div class="np-buttons" aria-label="Playback controls">
+        <button type="button" id="btnShuffle" class="btn btn-icon" aria-label="Shuffle off" title="Shuffle" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+        </button>
+        <button type="button" id="btnPrev" class="btn btn-icon" aria-label="Previous track" title="Previous (Shift+←)">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
+        </button>
+        <button type="button" id="btnPlay" class="btn btn-play" aria-label="Play" title="Play (Space)">
+          <svg id="iconPlay" viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7L8 5z"/></svg>
+          <svg id="iconPause" class="hidden" viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+        </button>
+        <button type="button" id="btnNext" class="btn btn-icon" aria-label="Next track" title="Next (Shift+→)">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></svg>
+        </button>
+        <button type="button" id="btnRepeat" class="btn btn-icon btn-repeat" aria-label="Repeat off" title="Repeat: off" data-mode="off">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+          <span id="repeatBadge" class="repeat-badge hidden" aria-hidden="true">1</span>
+        </button>
+      </div>
+      <div class="volume-row">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1-3.29-2.5-4.03v8.05c1.5-.74 2.5-2.26 2.5-4.02z"/></svg>
+        <input type="range" id="volume" class="volume" min="0" max="1" step="0.01" value="0.9" aria-label="Volume" />
+      </div>
+    </div>
+  </div>
 
   <dialog id="nameDialog" class="name-dialog">
     <form method="dialog" id="nameForm" class="name-form">
@@ -172,6 +178,6 @@
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

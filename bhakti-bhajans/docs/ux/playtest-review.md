@@ -211,6 +211,7 @@ Agrees with F1–F8. Elevates **play scale + waveform/progress** to **P0** (Game
 - Games / SongsJ: draft ready
 - Apple: DONE (2026-09-28)
 - Tesla: DONE (2026-09-29)
+- Tesla · Library IA: DONE (2026-09-29)
 - SoundCloud: filled (Music UX · SoundCloud)
 - Fixes shipped: **2026-09-28** (Apple + Tesla P1s + cheap P2s)
 
@@ -228,3 +229,195 @@ Agrees with F1–F8. Elevates **play scale + waveform/progress** to **P0** (Game
 - **P2** Repeat: off → all → one (no shuffle)
 - **P2** Keyboard: Space play/pause; ←/→ seek ±5s; Shift+←/→ prev/next
 - **Deferred:** SoundCloud fake waveform peaks (explicitly rejected — filled scrubber covers progress personality)
+
+---
+
+## Apple Music Library redesign
+
+**Author:** UX Chief · Apple · 2026-09-28  
+**Brief:** Stop landing on a mini-player. Make **Library** the product — calm hierarchical IA like Apple Music’s Library tab. Standalone page (no Games chrome). Categories, playlists, shuffle, recently played, sort by name/date. User rejected chip filters.
+
+### North star
+Apple Music Library is a **directory of listening**, not a stereo faceplate. The home screen is a short list of destinations. Playback lives in a persistent **bottom mini-bar**; the full player is a sheet you open on demand. One primary emotion: quiet ownership of *your* music.
+
+### Keep / Kill / Fix (current UI → Library)
+
+| | Call |
+|---|---|
+| **Keep** | Dark near-black + gold accent; system fonts; Media Session; seek fill; repeat off/all/one; track durations; playlist create/rename/delete + localStorage; sort name/date; category data model (`bhakti` / `folk` / `other`); shuffle *once library is a real list* |
+| **Kill** | **Games breadcrumb** (`‹ Games`) — this is a standalone music app, not a hub orphan. Hub may still *link in*; the page itself never looks like a game. |
+| **Kill** | **Player-first landing** — the large `.player-card` above everything. That is Now Playing, not Library. |
+| **Kill** | **Category chips** (All / Bhakti / Folk / Other) — filter chrome the user disliked; feels like a toolbar, not a library. |
+| **Kill** | Mid-page **Library / Playlists / Recent tabs** sitting under a player — Apple Music doesn’t put secondary tabs under transport. Destinations *are* the Library list. |
+| **Kill** | Tagline **“Offline-ready”** unless a real SW caches audio. Until then: `Ad-free · Remote` or nothing under the title. Honesty > aspiration. |
+| **Fix** | Split **Library home** vs **Now Playing sheet** vs **Mini-bar**. Three surfaces, clear jobs. |
+
+---
+
+### Information architecture
+
+```
+My Music                          ← large title (Apple Music style)
+─────────────────────────────────
+  Playlists                    ›
+  Songs                        ›
+  Recently Played              ›
+  Bhakti                       ›     ← categories as Library rows, not chips
+  Folk                         ›
+  Other                        ›
+─────────────────────────────────
+[ ▶  Title · Artist      ▓▓▓░░ ]   ← fixed bottom mini-bar (always when queue exists)
+```
+
+**Not on Library home:** seek scrubber, volume, shuffle/repeat cluster, full art. Those belong in Now Playing.
+
+---
+
+### Screen map
+
+#### 1. Library home (default land)
+- **Top:** Large title `My Music` only. No back to Games. Optional tiny overflow `⋯` later (About / clear recent) — not v1 chrome.
+- **Body:** Grouped list rows (44–52px), chevron right, no chips, no sort on this screen.
+  - **Playlists** → playlist browser
+  - **Songs** → all tracks (default sort = Name; sort control lives *inside* Songs)
+  - **Recently Played** → recents
+  - **Categories** (section header “Categories” or unlabeled second group): **Bhakti**, **Folk**, **Other** — each opens a filtered song list. Empty categories still show (count `0` or grey) so IA stays stable as catalog grows.
+- **Bottom:** Mini-bar (see below). If nothing ever played this session and no resume state, mini-bar can be collapsed or show “Choose something to play” once — prefer resume last track paused if `localStorage` has state.
+
+#### 2. Songs (and category drill-ins)
+- **Nav:** `‹ Library` + title (`Songs` / `Bhakti` / …)
+- **Toolbar (calm, one row):** Sort control only — segmented or menu: **Name** | **Date added**. No category chips here; you’re already inside a category or All Songs.
+- **List:** `# · Title` / subtitle artist · duration right-aligned. Tap = play that track (queue = current list context).
+- **Optional header action:** Shuffle play (plays current list shuffled) — icon or text button top-right, Apple Music pattern. Only show when list length ≥ 2.
+
+#### 3. Playlists
+- **List:** Named playlists + **New Playlist** (top or first row with `+`).
+- **Detail:** `‹ Playlists` · name · Rename / Delete overflow · track list · Add track (keep select+Add for static Pages; polish later).
+- Playing from a playlist sets **queue = that playlist**; shuffle/repeat apply to that queue.
+
+#### 4. Recently Played
+- Chronological (newest first), capped (e.g. 20). Empty state: one line, no illustration theater.
+- Tap = play; does not invent a separate queue model beyond “songs.”
+
+#### 5. Now Playing (full sheet — push or bottom sheet)
+Opened by tapping the mini-bar (or expanding).
+```
+        ✕ or swipe down
+     [ large art ]
+   Title / Artist / Category
+  0:12 ———●———— 4:01
+   ⇄   ‹   ▶   ›   ↻     Play 72–80px; shuffle + repeat flanking
+```
+- Volume: hide on coarse pointer (hardware). Desktop: overflow or discreet row.
+- This is the **only** place full transport lives. Library screens never duplicate a second player card.
+
+#### 6. Mini-bar (persistent, bottom — like Apple Music)
+```
+┌────────────────────────────────────────┐
+│ [art]  Title                    ▶/❚❚   │  optional thin progress under bar
+│        Artist                          │
+└────────────────────────────────────────┘
+```
+- Always above the home indicator / safe area.
+- Tap bar (not just play) → open Now Playing sheet.
+- Play/pause on the right — thumb zone.
+- Progress: 2px gold fill under the bar optional; no second scrubber on Library.
+
+---
+
+### How category & sort appear (no chips)
+
+| Need | Where | Control |
+|------|--------|---------|
+| Browse by category | Library home rows | Drill-in lists |
+| Filter while in All Songs | **Don’t** reintroduce chips | Use category rows instead |
+| Sort | Inside Songs / category / playlist detail | Name \| Date (select or two-segment) |
+| Shuffle | Songs/playlist header + Now Playing | Shuffle play list; Now Playing toggles shuffle for current queue |
+
+---
+
+### Standalone vs hub
+
+- **In-app:** No `‹ Games`. Title `My Music`. Treat URL as its own web app (`apple-mobile-web-app-capable` already set).
+- **Hub:** Games index may keep a tile that deep-links here — discovery only. Crossing that link is leaving Games; the destination must not look like a game chrome child.
+- **Honest subtitle** (if any, under large title or in About): `Ad-free · No tracking`. Drop “Offline-ready” until SW + cached audio exist; “Remote” is fine in About, not as a hero claim.
+
+---
+
+### Data / behavior notes (for implementers)
+
+- **Queue context:** Playing from Songs / Bhakti / Playlist A sets `queue = that list` + `index`. Next/prev/shuffle stay inside that queue.
+- **Resume:** Persist last `trackId`, `position`, `queueId` (`all` | `category:bhakti` | `playlist:<id>` | `recent`), shuffle/repeat in `localStorage`.
+- **Empty Other / Folk:** Show the row; empty list copy: “No songs yet.” Don’t hide IA for two-track catalogs.
+- **Perf:** No CDN fonts; no decorative orbs; Library home is mostly text rows — keep JS small.
+
+---
+
+### Priority
+
+| Priority | Item |
+|----------|------|
+| **P0** | Library-first home (destination rows) + **kill player-card-on-land** + **kill Games back link** + **kill category chips** |
+| **P0** | Bottom **mini-bar** + tap → **Now Playing sheet** (transport moved off Library) |
+| **P1** | Songs / category / playlist / recent drill-ins with `‹ Library` (or `‹ Playlists`) |
+| **P1** | Sort Name/Date only on list screens; Shuffle play on lists ≥2; shuffle+repeat on Now Playing |
+| **P1** | Honest copy (no false offline); resume last play into mini-bar |
+| **P2** | Thin progress under mini-bar; playlist art placeholders; About/overflow; real offline SW later |
+| **P2** | Keyboard: Space on Now Playing / when not typing; ←/→ seek; Shift+arrows skip (keep prior mapping) |
+
+### Explicit non-goals (v1 Library)
+- Accounts, cloud sync, search field (add when catalog ≫ ~20)
+- Waveform cosplay, social, lyrics panel
+- Re-skinning as Games paper/ink
+- Chip or pill filter toolbars of any kind
+
+### Acceptance check
+Land on the URL with a cold cache → you see **My Music** + destination list + (if resume) mini-bar — **not** a giant Play button and chip row. That is the redesign.
+
+**Apple: Library redesign section DONE.** Ready for SongsJ to implement P0 scaffold.
+
+## Tesla · Library IA
+
+**Ask:** Apple Music **Library** tab information architecture for My Music. Library + bottom Now Playing bar win. No Games chrome. P0/P1 only.
+
+**North star:** Library owns the scroll. Transport lives in a sticky bottom mini-bar (expand for full controls). Today is inverted: a fat top `player-card` eats the fold, then tabs + list. That is a single-playlist player, not Library.
+
+### Target skeleton
+```
+My Music                          ← title only
+Library · Playlists · Recent      ← secondary tabs (or bottom tab bar later)
+[chips only when useful]
+Track rows (num · title · duration)  ← owns viewport
+────────────────────────────────
+[ art | title · artist | ▶ ]      ← sticky mini Now Playing
+```
+Tap mini-bar → expand seek / prev-next / shuffle / repeat (sheet or full Now Playing). Do not keep full transport on Library forever.
+
+### Kill (so Library + mini-bar win)
+
+| Priority | Delete | Why |
+|---|---|---|
+| **P0** | Top full `player-card` on Library | Competes with the catalog. Move to **bottom mini-bar** (art + title + Play). Seek/volume/shuffle/repeat only on expand. |
+| **P0** | `‹ Games` primary chrome | Games hub skin. My Music is not a game. Hub exit: overflow `···` → Back to hub, or a quiet `‹` with no "Games" label. |
+| **P0** | Header tagline stack (`Remote · Ad-free · Offline-ready`) | Marketing under H1. Library apps lead with title + list. Honest claims belong in About / README. (SW offline is fine in product truth — not in the chrome.) |
+| **P0** | Empty category chips (Folk / Other with 0 tracks) | Dead filters. Show a chip only if `count(category) ≥ 1`. With 2 Bhakti tracks, default = All (or hide chips until ≥2 categories used). |
+| **P0** | Visible Sort label + select as equal chrome | Admin UI. Prefer overflow sort (Name / Date) or one icon control. List > toolbar. |
+| **P1** | Always-on volume row on phone | Hardware volume. Hide on coarse / narrow (already intended; enforce with mini-bar). |
+| **P1** | Shuffle in primary triad with ≪5 tracks | Noise. Keep Repeat; Shuffle behind expand or when library ≥5. |
+| **P1** | Playlist "Add track…" select + Add row | Catalog admin. Prefer `···` on a Library row → Add to playlist. Detail screen = tracks + rename/delete only. |
+| **P1** | Redundant "Tracks" heading when tab is Library | Tab already names the context. Keep count only (`2 songs`) if useful. |
+
+### Keep
+- Tabs: **Library / Playlists / Recent** — correct Apple Music Library siblings for a tiny personal catalog. Do **not** add Artists / Albums / Genres until track count justifies it (~20+).
+- Row tap = play; durations; Media Session; system fonts; dark gold (not hub paper/ink).
+- Playlists + Recent in `localStorage` — right place for personal state.
+
+### P0 / P1 ship order
+1. **P0** Collapse top player → **sticky bottom Now Playing mini-bar**; expand for full transport  
+2. **P0** Strip Games chrome + header tagline  
+3. **P0** Conditional chips (no empty Folk/Other)  
+4. **P1** Demote Sort / Shuffle / volume / playlist-add admin UI per table above  
+
+**Explicit non-goals:** Listen Now / Browse / Radio / Search clones; Artists hierarchy; Games accent rails; fake waveform on Library.
+
+**Bottom line:** Delete the top shrine. Library is the product surface. One thumb-zone Play on a bottom bar. No Games wordmark in the chrome.
