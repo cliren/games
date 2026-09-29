@@ -1,9 +1,9 @@
 /**
  * Google Drive folder import for My Music (static GitHub Pages).
  *
- * Keyless listing: fetch Google's public embeddedfolderview via a CORS-friendly
- * reader proxy (jina.ai), parse file ids + names. Fallbacks: allorigins; paste
- * multi-line file links.
+ * Listing: with unlock password (API key) → Drive files.list (complete + resourceKey).
+ * Keyless fallback: embeddedfolderview via jina/allorigins — MERGE results (jina often
+ * truncates mid-folder). Paste multi-line file links as last resort.
  *
  * Playback (browser): drive.usercontent.google.com rejects cross-site requests
  * (Sec-Fetch-Site: cross-site → 403). Use either:
@@ -53,6 +53,25 @@
       raw.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
       raw.match(/\/uc\?.*?id=([a-zA-Z0-9_-]+)/);
     return m ? m[1] : null;
+  };
+
+  /** Optional resourcekey= from a shared Drive link (needed for some link-only files). */
+  const extractResourceKey = (urlOrId) => {
+    const raw = String(urlOrId || "");
+    const m = raw.match(/[?&]resourcekey=([a-zA-Z0-9_-]+)/i);
+    return m ? m[1] : "";
+  };
+
+  /** Build X-Goog-Drive-Resource-Keys from [[id, key], ...]. */
+  const resourceKeysHeaderValue = (pairs) => {
+    const parts = [];
+    (pairs || []).forEach((p) => {
+      if (!p) return;
+      const id = p[0] || p.id;
+      const key = p[1] || p.resourceKey || p.key;
+      if (id && key) parts.push(String(id) + "/" + String(key));
+    });
+    return parts.length ? parts.join(",") : "";
   };
 
   const loadFolders = () => {
@@ -112,6 +131,7 @@
       id,
       url: folderUrl(id),
       name: name || "",
+      resourceKey: extractResourceKey(urlOrId) || "",
       addedAt: new Date().toISOString(),
     };
     folders.push(folder);
@@ -200,7 +220,12 @@
       encodeURIComponent(key);
     let res;
     try {
-      res = await fetch(url, { method: "GET", mode: "cors", credentials: "omit" });
+      res = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        credentials: "omit",
+        referrerPolicy: "no-referrer-when-downgrade",
+      });
     } catch (_) {
       const err = new Error(
         "Could not check the password. Check your connection and try again."
@@ -246,7 +271,10 @@
     let message = "Wrong password.";
     let code = "http_" + res.status;
 
-    if (
+    if (/API key expired|API_KEY_EXPIRED/i.test(combined)) {
+      message = "Password expired. Ask the admin for a new password.";
+      code = "expired";
+    } else if (
       /API_KEY_INVALID|API key not valid/i.test(combined) ||
       (res.status === 400 && /INVALID_ARGUMENT|badRequest/i.test(combined))
     ) {
@@ -445,18 +473,104 @@
     return objectUrl;
   };
 
-  const fetchArrayBuffer = async (url, { signal, stripReferrer } = {}) => {
-    // Default: send referrer so HTTP-referrer-restricted unlock passwords work
-    // on googleapis. Strip only for usercontent (no key auth).
+  const fetchArrayBuffer = async (url, { signal, stripReferrer, fullReferrer, headers } = {}) => {
+    // googleapis: send a full HTTPS referrer so HTTP-referrer restrictions like
+    // https://cliren.github.io/* match (browser default often sends origin only).
+    // usercontent: strip referrer (no key auth).
     const opts = {
       method: "GET",
       mode: "cors",
       credentials: "omit",
       signal,
     };
+    if (headers && typeof headers === "object") opts.headers = headers;
     if (stripReferrer) opts.referrerPolicy = "no-referrer";
+    else if (fullReferrer) opts.referrerPolicy = "no-referrer-when-downgrade";
     const res = await fetch(url, opts);
     return res;
+  };
+
+  /** Parse Drive JSON error body into { message, reason, status }. */
+  const parseDriveApiError = (buf, httpStatus) => {
+    let message = "";
+    let reason = "";
+    let status = "";
+    try {
+      const text = new TextDecoder("utf-8", { fatal: false })
+        .decode(buf.slice(0, 800))
+        .replace(/\s+/g, " ")
+        .trim();
+      const body = JSON.parse(text);
+      const errObj = body && body.error ? body.error : null;
+      if (errObj) {
+        message = String(errObj.message || "");
+        status = String(errObj.status || "");
+        const first =
+          errObj.errors && errObj.errors[0] && errObj.errors[0].reason
+            ? String(errObj.errors[0].reason)
+            : "";
+        reason = first;
+        const details = Array.isArray(errObj.details) ? errObj.details : [];
+        for (const d of details) {
+          if (d && d.reason) {
+            reason = String(d.reason);
+            break;
+          }
+        }
+      } else {
+        message = text.slice(0, 160);
+      }
+    } catch (_) { /* ignore */ }
+    return { message, reason, status, httpStatus: httpStatus || 0 };
+  };
+
+  /**
+   * Map Drive API failure to password-language Error (never says "API key").
+   * Sets err.code / err.driveReason for UI.
+   */
+  const playErrorFromDriveApi = (parsed) => {
+    const combined = (
+      (parsed.message || "") + " " + (parsed.reason || "") + " " + (parsed.status || "")
+    ).trim();
+    let message = "Could not play this song.";
+    let code = "DRIVE_API_HTTP";
+    if (/insufficientFilePermissions|insufficientPermissions|notFound|File not found/i.test(combined)) {
+      message =
+        "This song isn’t shared for playback. In Drive, set Anyone with the link · Viewer on the file (or its folder).";
+      code = "DRIVE_NOT_SHARED";
+    } else if (/API_KEY_HTTP_REFERRER_BLOCKED|referer|referrer/i.test(combined)) {
+      message =
+        "Playback was blocked by site settings. Ask the admin to allow this site for the password.";
+      code = "DRIVE_REFERRER";
+    } else if (/API key expired|API_KEY_EXPIRED/i.test(combined)) {
+      message = "Password expired. Lock, then unlock with a new password.";
+      code = "DRIVE_PASSWORD_EXPIRED";
+    } else if (/API_KEY_INVALID|API key not valid|INVALID_ARGUMENT/i.test(combined)) {
+      message = "Password isn’t valid for playback. Lock and unlock again.";
+      code = "DRIVE_BAD_PASSWORD";
+    } else if (
+      /has not been used|not enabled|accessNotConfigured|SERVICE_DISABLED|API_KEY_SERVICE_BLOCKED/i.test(
+        combined
+      )
+    ) {
+      message = "Playback service isn’t ready. Try again later.";
+      code = "DRIVE_NOT_ENABLED";
+    } else if (/API_KEY_IP_ADDRESS_BLOCKED|ip address/i.test(combined)) {
+      message = "Playback was blocked from this network. Try another connection.";
+      code = "DRIVE_IP_BLOCKED";
+    } else if (parsed.httpStatus === 403) {
+      message =
+        "Could not open this song. Check Drive link sharing (Anyone with the link · Viewer).";
+      code = "DRIVE_FORBIDDEN";
+    } else if (parsed.httpStatus >= 500) {
+      message = "Drive is temporarily unavailable. Try again in a moment.";
+      code = "DRIVE_SERVER";
+    }
+    const err = new Error(message);
+    err.code = code;
+    err.status = parsed.httpStatus;
+    err.driveReason = parsed.reason || "";
+    return err;
   };
 
   /**
@@ -528,17 +642,24 @@
     throw e;
   };
 
-  const fetchViaGoogleApis = async (fileId, apiKey, { signal } = {}) => {
+  const fetchViaGoogleApis = async (fileId, apiKey, { signal, resourceKey } = {}) => {
     const url =
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
         fileId
-      )}?alt=media&key=${encodeURIComponent(apiKey)}`;
+      )}?alt=media&key=${encodeURIComponent(apiKey)}&supportsAllDrives=true`;
+    const headers = {};
+    const rk = resourceKeysHeaderValue([[fileId, resourceKey]]);
+    if (rk) headers["X-Goog-Drive-Resource-Keys"] = rk;
     let res;
     try {
-      res = await fetchArrayBuffer(url, { signal });
+      res = await fetchArrayBuffer(url, {
+        signal,
+        fullReferrer: true,
+        headers: Object.keys(headers).length ? headers : undefined,
+      });
     } catch (err) {
       const e = new Error(
-        `googleapis fetch failed (${err && err.message ? err.message : "network"})`
+        "Could not reach Drive to play this song. Check your connection."
       );
       e.code = "DRIVE_API_FETCH";
       throw e;
@@ -546,24 +667,10 @@
     const type = (res.headers.get("content-type") || "").split(";")[0].trim();
     const buf = await res.arrayBuffer();
     if (!res.ok) {
-      let detail = "";
-      try {
-        detail = new TextDecoder("utf-8", { fatal: false })
-          .decode(buf.slice(0, 400))
-          .replace(/\s+/g, " ")
-          .trim();
-      } catch (_) { /* ignore */ }
-      const e = new Error(
-        `Drive API HTTP ${res.status}${detail ? ": " + detail.slice(0, 160) : ""}`
-      );
-      e.code = "DRIVE_API_HTTP";
-      e.status = res.status;
-      throw e;
+      throw playErrorFromDriveApi(parseDriveApiError(buf, res.status));
     }
     if (!looksLikeAudio(type, buf) || buf.byteLength < 64) {
-      const e = new Error(
-        `Drive API returned unexpected body (${type || "unknown"}, ${buf.byteLength} bytes)`
-      );
+      const e = new Error("Drive returned something that isn’t audio.");
       e.code = "DRIVE_API_BAD_TYPE";
       throw e;
     }
@@ -650,16 +757,31 @@
     return { buf, type };
   };
 
+  const lookupCachedResourceKey = (fileId) => {
+    try {
+      const tracks = (loadCache().tracks || []);
+      const t = tracks.find((x) => x && x.driveFileId === fileId);
+      return (t && t.driveResourceKey) || "";
+    } catch (_) {
+      return "";
+    }
+  };
+
   /**
    * CORS-fetch a Drive file into a blob: URL usable by <audio>.
-   * Order: API key (googleapis) → media proxy → direct usercontent (+ confirm).
+   * Order: unlock password → googleapis alt=media (with resource key when known)
+   * → media proxy → direct usercontent (+ confirm).
+   * For "Anyone with the link" files, alt=media + password works with no Google
+   * account signed in (browser must send referrer if the password is referrer-restricted).
    */
-  const fetchPlayableUrl = async (fileId, { signal } = {}) => {
+  const fetchPlayableUrl = async (fileId, { signal, resourceKey } = {}) => {
     if (!fileId) throw new Error("Missing Drive file id");
     const cached = getCachedBlobUrl(fileId);
     if (cached) return cached;
 
+    const rk = resourceKey || lookupCachedResourceKey(fileId) || "";
     const errors = [];
+    let primaryErr = null;
     const tryPath = async (label, fn) => {
       try {
         const { buf, type } = await fn();
@@ -667,6 +789,7 @@
         return storeBlob(fileId, objectUrl);
       } catch (err) {
         if (err && err.name === "AbortError") throw err;
+        if (!primaryErr) primaryErr = err;
         errors.push(`${label}: ${err && err.message ? err.message : err}`);
         return null;
       }
@@ -675,9 +798,18 @@
     const key = getApiKey();
     if (key) {
       const ok = await tryPath("api-key", () =>
-        fetchViaGoogleApis(fileId, key, { signal })
+        fetchViaGoogleApis(fileId, key, { signal, resourceKey: rk })
       );
       if (ok) return ok;
+      // Share / password / referrer failures won't be fixed by usercontent (Sec-Fetch 403).
+      if (
+        primaryErr &&
+        /DRIVE_NOT_SHARED|DRIVE_REFERRER|DRIVE_BAD_PASSWORD|DRIVE_PASSWORD_EXPIRED|DRIVE_NOT_ENABLED|DRIVE_FORBIDDEN|DRIVE_IP_BLOCKED/.test(
+          String(primaryErr.code || "")
+        )
+      ) {
+        throw primaryErr;
+      }
     }
 
     const proxy = getMediaProxy();
@@ -693,10 +825,10 @@
     );
     if (ok) return ok;
 
-    const hint =
-      "Unlock with your password or set a media proxy to play this item.";
+    if (primaryErr && primaryErr.message) throw primaryErr;
+
     const err = new Error(
-      (errors[0] || "Could not download Drive audio") + " — " + hint
+      "Could not play this song. Unlock with your password, check Drive link sharing, or set a media proxy."
     );
     err.code = "DRIVE_PLAYBACK_FAILED";
     err.details = errors;
@@ -865,7 +997,11 @@
         name = fromLine ? fromLine[1] : `Drive file ${id.slice(0, 8)}`;
       }
       seen.add(id);
-      files.push({ id, name });
+      files.push({
+        id,
+        name,
+        resourceKey: extractResourceKey(urlPart) || extractResourceKey(trimmed) || "",
+      });
     }
     return files;
   };
@@ -880,14 +1016,142 @@
     return res.text();
   };
 
+  const mergeListings = (parts) => {
+    const filesById = new Map();
+    const foldersById = new Map();
+    let title = "";
+    const methods = [];
+    for (const p of parts) {
+      if (!p) continue;
+      if (p.method) methods.push(p.method);
+      if (p.title && !title) title = p.title;
+      (p.files || []).forEach((f) => {
+        if (!f || !f.id) return;
+        const prev = filesById.get(f.id);
+        // Prefer richer names / resource keys
+        if (!prev) {
+          filesById.set(f.id, { ...f });
+        } else {
+          filesById.set(f.id, {
+            ...prev,
+            ...f,
+            name: (f.name && f.name !== f.id ? f.name : prev.name) || prev.name || f.name,
+            resourceKey: f.resourceKey || prev.resourceKey || "",
+            mimeType: f.mimeType || prev.mimeType || "",
+          });
+        }
+      });
+      (p.folders || []).forEach((f) => {
+        if (!f || !f.id) return;
+        const prev = foldersById.get(f.id);
+        if (!prev) foldersById.set(f.id, { ...f });
+        else {
+          foldersById.set(f.id, {
+            ...prev,
+            ...f,
+            name: (f.name && f.name !== f.id ? f.name : prev.name) || prev.name || f.name,
+            resourceKey: f.resourceKey || prev.resourceKey || "",
+          });
+        }
+      });
+    }
+    return {
+      title,
+      files: Array.from(filesById.values()),
+      folders: Array.from(foldersById.values()),
+      method: methods.join("+") || null,
+    };
+  };
+
+  const isAudioMimeOrName = (name, mimeType) => {
+    const mime = String(mimeType || "").toLowerCase();
+    if (mime.startsWith("audio/")) return true;
+    if (AUDIO_EXT_RE.test(name || "")) return true;
+    return false;
+  };
+
   /**
-   * Keyless folder listing via CORS-friendly proxies of embeddedfolderview.
+   * Complete folder listing via Drive API (unlock password). Paginated.
+   * Returns resourceKey for link-only files when Google provides one.
    */
-  const fetchFolderListing = async (folderId) => {
+  const fetchFolderListingViaApi = async (folderId, apiKey, folderResourceKey) => {
+    const files = [];
+    const folders = [];
+    let pageToken = "";
+    const headers = {};
+    const rk = resourceKeysHeaderValue([[folderId, folderResourceKey]]);
+    if (rk) headers["X-Goog-Drive-Resource-Keys"] = rk;
+
+    // Escape single quotes in id for q= clause (Drive ids are normally safe).
+    const safeId = String(folderId).replace(/'/g, "\\'");
+    do {
+      const params = new URLSearchParams({
+        q: `'${safeId}' in parents and trashed = false`,
+        fields: "nextPageToken,files(id,name,mimeType,resourceKey,size)",
+        pageSize: "100",
+        key: apiKey,
+        supportsAllDrives: "true",
+        includeItemsFromAllDrives: "true",
+      });
+      if (pageToken) params.set("pageToken", pageToken);
+      const url = "https://www.googleapis.com/drive/v3/files?" + params.toString();
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "GET",
+          mode: "cors",
+          credentials: "omit",
+          referrerPolicy: "no-referrer-when-downgrade",
+          headers: Object.keys(headers).length ? headers : undefined,
+        });
+      } catch (err) {
+        const e = new Error("Could not reach Drive to list this folder.");
+        e.code = "LISTING_NETWORK";
+        throw e;
+      }
+      if (!res.ok) {
+        const buf = await res.arrayBuffer();
+        const parsed = parseDriveApiError(buf, res.status);
+        const combined = (parsed.message + " " + parsed.reason).trim();
+        const e = new Error(
+          /insufficientFilePermissions|notFound/i.test(combined)
+            ? "Could not list this folder with the password. Share it as Anyone with the link · Viewer."
+            : "Could not list this Drive folder (password check failed)."
+        );
+        e.code = "LISTING_API";
+        e.status = res.status;
+        e.driveReason = parsed.reason || "";
+        throw e;
+      }
+      const json = await res.json();
+      for (const f of json.files || []) {
+        if (!f || !f.id) continue;
+        const mime = f.mimeType || "";
+        const entry = {
+          id: f.id,
+          name: f.name || f.id,
+          resourceKey: f.resourceKey || "",
+          mimeType: mime,
+          size: f.size != null ? Number(f.size) : null,
+        };
+        if (mime === "application/vnd.google-apps.folder") {
+          folders.push(entry);
+        } else if (isAudioMimeOrName(entry.name, mime)) {
+          files.push(entry);
+        }
+      }
+      pageToken = json.nextPageToken || "";
+    } while (pageToken);
+
+    return { title: "", files, folders, method: "drive-api" };
+  };
+
+  const fetchKeylessListingPart = async (folderId) => {
     const emb = embeddedUrl(folderId);
+    const parts = [];
     const errors = [];
 
-    // 1) jina.ai reader (CORS reflects Origin; returns markdown or JSON)
+    // 1) jina.ai — often truncates mid-folder; still useful as a partial source
     try {
       const jinaUrl = `https://r.jina.ai/${emb}`;
       const res = await fetch(jinaUrl, {
@@ -902,35 +1166,42 @@
         const content = (data && (data.content || data.text)) || "";
         const title = (data && data.title) || "";
         parsed = parseReaderMarkdown(content, title);
-        if (!parsed.files.length && !parsed.folders.length && typeof content === "string" && content.includes("flip-entry")) {
+        if (
+          !parsed.files.length &&
+          !parsed.folders.length &&
+          typeof content === "string" &&
+          content.includes("flip-entry")
+        ) {
           parsed = parseEmbeddedHtml(content);
         }
       } else {
-        const text = await res.text();
-        if (text.includes("flip-entry") || text.includes("id=\"entry-")) {
-          parsed = parseEmbeddedHtml(text);
+        const body = await res.text();
+        if (body.includes("flip-entry") || body.includes('id="entry-')) {
+          parsed = parseEmbeddedHtml(body);
         } else {
-          const titleMatch = text.match(/^Title:\s*(.+)$/m);
-          parsed = parseReaderMarkdown(text, titleMatch ? titleMatch[1].trim() : "");
+          const titleMatch = body.match(/^Title:\s*(.+)$/m);
+          parsed = parseReaderMarkdown(body, titleMatch ? titleMatch[1].trim() : "");
         }
       }
       if (parsed.files.length || parsed.folders.length) {
-        return { ...parsed, method: "jina" };
+        parts.push({ ...parsed, method: "jina" });
+      } else {
+        errors.push("jina: no audio entries found");
       }
-      errors.push("jina: no audio entries found");
     } catch (err) {
       errors.push(`jina: ${err.message || err}`);
     }
 
-    // 2) allorigins raw HTML (fragile; may 5xx)
+    // 2) allorigins raw HTML (full embeddedfolderview when healthy)
     try {
       const ao = `https://api.allorigins.win/raw?url=${encodeURIComponent(emb)}`;
       const html = await fetchText(ao);
       const parsed = parseEmbeddedHtml(html);
       if (parsed.files.length || parsed.folders.length) {
-        return { ...parsed, method: "allorigins" };
+        parts.push({ ...parsed, method: "allorigins" });
+      } else {
+        errors.push("allorigins: no audio entries found");
       }
-      errors.push("allorigins: no audio entries found");
     } catch (err) {
       errors.push(`allorigins: ${err.message || err}`);
     }
@@ -944,20 +1215,58 @@
       const html = json && json.contents ? json.contents : "";
       const parsed = parseEmbeddedHtml(html);
       if (parsed.files.length || parsed.folders.length) {
-        return { ...parsed, method: "allorigins-json" };
+        parts.push({ ...parsed, method: "allorigins-json" });
+      } else {
+        errors.push("allorigins-json: no audio entries found");
       }
-      errors.push("allorigins-json: no audio entries found");
     } catch (err) {
       errors.push(`allorigins-json: ${err.message || err}`);
     }
 
+    // 4) corsproxy.io fallback for full HTML (when allorigins is empty/down)
+    try {
+      const cp = `https://corsproxy.io/?${encodeURIComponent(emb)}`;
+      const html = await fetchText(cp);
+      const parsed = parseEmbeddedHtml(html);
+      if (parsed.files.length || parsed.folders.length) {
+        parts.push({ ...parsed, method: "corsproxy" });
+      } else {
+        errors.push("corsproxy: no audio entries found");
+      }
+    } catch (err) {
+      errors.push(`corsproxy: ${err.message || err}`);
+    }
+
+    const merged = mergeListings(parts);
+    if (merged.files.length || merged.folders.length) {
+      return merged;
+    }
     const err = new Error(
-      "Could not list this Drive folder (keyless proxy listing failed). Paste file links instead, or try Refresh later. " +
+      "Could not list this Drive folder (page readers failed). Paste file links instead, or try Refresh later. " +
         errors.slice(0, 2).join("; ")
     );
     err.code = "LISTING_FAILED";
     err.details = errors;
     throw err;
+  };
+
+  /**
+   * Folder listing: Drive API when unlocked (complete), else merged keyless proxies.
+   * Never trust a single truncated jina response as the full folder.
+   */
+  const fetchFolderListing = async (folderId, opts) => {
+    const options = opts || {};
+    const apiKey = options.apiKey != null ? options.apiKey : getApiKey();
+    const folderResourceKey = options.resourceKey || "";
+    if (apiKey) {
+      try {
+        return await fetchFolderListingViaApi(folderId, apiKey, folderResourceKey);
+      } catch (err) {
+        // Fall through to keyless merge — still better than failing hard.
+        if (err && err.name === "AbortError") throw err;
+      }
+    }
+    return fetchKeylessListingPart(folderId);
   };
 
   const fileToTrack = (file, category, folderId) => {
@@ -971,17 +1280,21 @@
       source: "drive",
       driveFileId: file.id,
       driveFolderId: folderId || null,
-      mimeType: "",
-      size: null,
+      driveResourceKey: file.resourceKey || "",
+      mimeType: file.mimeType || "",
+      size: file.size != null ? file.size : null,
     };
   };
 
   /**
    * List one linked folder: root audio → bhakti; recurse one level into
    * Bhakti / Folk / Other subfolders for category.
+   * Trust listing.files (already audio-filtered); do not drop extension-less names.
    */
   const listFolderTracks = async (folder) => {
-    const listing = await fetchFolderListing(folder.id);
+    const listing = await fetchFolderListing(folder.id, {
+      resourceKey: folder.resourceKey || "",
+    });
     if (listing.title) {
       const cleaned = listing.title.replace(/\s+$/, "").trim();
       if (cleaned) folder.name = cleaned;
@@ -989,7 +1302,6 @@
 
     const tracks = [];
     for (const f of listing.files) {
-      if (!AUDIO_EXT_RE.test(f.name)) continue;
       tracks.push(fileToTrack(f, "bhakti", folder.id));
     }
 
@@ -997,9 +1309,10 @@
       const cat = categoryFromFolderName(sub.name);
       if (!cat) continue;
       try {
-        const nested = await fetchFolderListing(sub.id);
+        const nested = await fetchFolderListing(sub.id, {
+          resourceKey: sub.resourceKey || folder.resourceKey || "",
+        });
         for (const f of nested.files) {
-          if (!AUDIO_EXT_RE.test(f.name)) continue;
           tracks.push(fileToTrack(f, cat, folder.id));
         }
       } catch (_) {
@@ -1111,6 +1424,7 @@
     EXAMPLE_FOLDER_NAME,
     extractFolderId,
     extractFileId,
+    extractResourceKey,
     loadFolders,
     saveFolders,
     addFolder,

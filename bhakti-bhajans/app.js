@@ -504,6 +504,7 @@
       setPlayingUI(false);
       DriveMusic.fetchPlayableUrl(fileId, {
         signal: loadAbort ? loadAbort.signal : undefined,
+        resourceKey: track.driveResourceKey || "",
       })
         .then((blobUrl) => {
           if (token !== loadToken) return;
@@ -515,18 +516,26 @@
           if (err && err.name === "AbortError") return;
           console.warn("Drive playback failed", err);
           const code = err && err.code ? String(err.code) : "";
-          const msg = (err && err.message) || "Could not play (Drive)";
-          // Surface a short actionable line in the mini-bar (temporary verbosity).
-          let short = "Could not play (Drive)";
-          if (code === "DRIVE_CROSS_SITE_BLOCK" || /Sec-Fetch|cross-site/i.test(msg)) {
-            short = "Drive blocked (check password/proxy)";
+          const msg = (err && err.message) || "Could not play this song.";
+          // Mini-bar: short password-language line (never "API key").
+          let short = "Could not play";
+          if (code === "DRIVE_NOT_SHARED" || /isn’t shared|Anyone with the link/i.test(msg)) {
+            short = "Not shared for playback";
+          } else if (code === "DRIVE_REFERRER") {
+            short = "Blocked by site settings";
+          } else if (code === "DRIVE_PASSWORD_EXPIRED") {
+            short = "Password expired — lock & unlock";
+          } else if (code === "DRIVE_BAD_PASSWORD") {
+            short = "Password issue — lock & unlock";
+          } else if (code === "DRIVE_CROSS_SITE_BLOCK" || /Sec-Fetch|cross-site/i.test(msg)) {
+            short = "Drive blocked (password/proxy)";
           } else if (code === "DRIVE_VIRUS_SCAN") {
-            short = "Drive confirm/virus-scan page";
-          } else if (code === "DRIVE_API_HTTP" || code === "DRIVE_API_FETCH") {
-            short = "Drive access failed";
+            short = "Drive confirm page";
           } else if (code === "DRIVE_PROXY_FETCH" || code === "DRIVE_PROXY_HTTP") {
             short = "Media proxy failed";
-          } else if (msg.length < 64) {
+          } else if (code === "DRIVE_API_HTTP" || code === "DRIVE_API_FETCH" || code === "DRIVE_FORBIDDEN") {
+            short = "Couldn’t open song";
+          } else if (msg.length < 48) {
             short = msg;
           }
           miniArtist.textContent = short;
@@ -1609,7 +1618,8 @@
   const updateDriveKeyStatus = () => {
     if (!driveKeyStatus || !window.DriveMusic) return;
     if (DriveMusic.getApiKey && DriveMusic.getApiKey()) {
-      driveKeyStatus.textContent = "Playback uses the password from unlock (stored in this browser).";
+      driveKeyStatus.textContent =
+        "Ready to play · songs need Anyone with the link · Viewer (folder or each file).";
     } else {
       driveKeyStatus.textContent = "Locked — unlock with your password to play.";
     }
@@ -1650,7 +1660,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=17").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=18").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
