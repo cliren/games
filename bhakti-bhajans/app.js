@@ -95,6 +95,20 @@
   /** System paused us (call, other audio, OS) while we still wanted to play */
   let interruptedBySystem = false;
 
+  /** iOS Safari / iPadOS (incl. iPad desktop UA) — Media Session quirks */
+  const isIOS = () =>
+    /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  // Keep background playback + lock-screen eligibility on iOS
+  try {
+    audio.setAttribute("playsinline", "");
+    audio.setAttribute("webkit-playsinline", "");
+    audio.playsInline = true;
+    // auto: warmer buffer; metadata alone is fine for list probes
+    audio.preload = "auto";
+  } catch (_) { /* ignore */ }
+
   const uid = () =>
     "pl_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -362,26 +376,31 @@
   const mediaArtwork = () => {
     if (mediaArtworkCache) return mediaArtworkCache;
     const artwork = [];
-    try {
-      // PNG data URLs work on lock screens; SVG is ignored on many mobile OSes.
-      const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
+    // iOS picks the first artwork entry and historically greys out images >128px.
+    // Generate real per-size PNGs (data URLs / same-origin) — SVG is ignored on iOS.
+    const sizes = isIOS() ? [96, 128, 256] : [96, 128, 192, 256, 384, 512];
+    sizes.forEach((size) => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
         ctx.fillStyle = "#f5e6ea";
-        ctx.fillRect(0, 0, 512, 512);
+        ctx.fillRect(0, 0, size, size);
         ctx.fillStyle = "#fc3c44";
-        ctx.font = "220px system-ui, sans-serif";
+        const fontPx = Math.round(size * 0.43);
+        ctx.font = `${fontPx}px system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("♪", 256, 280);
-        const png = canvas.toDataURL("image/png");
-        [96, 128, 192, 256, 384, 512].forEach((size) => {
-          artwork.push({ src: png, sizes: `${size}x${size}`, type: "image/png" });
+        ctx.fillText("♪", size / 2, size * 0.55);
+        artwork.push({
+          src: canvas.toDataURL("image/png"),
+          sizes: `${size}x${size}`,
+          type: "image/png",
         });
-      }
-    } catch (_) { /* ignore */ }
+      } catch (_) { /* ignore */ }
+    });
     if (!artwork.length) {
       try {
         const abs = new URL(
@@ -398,12 +417,17 @@
     return artwork;
   };
 
-  const updatePositionState = () => {
+  let lastPositionStateAt = 0;
+  const updatePositionState = (force = false) => {
     if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") {
       return;
     }
     try {
       if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      // Throttle timeupdate spam — iOS is happier with ~0.5–1s ticks
+      if (!force && now - lastPositionStateAt < 500) return;
+      lastPositionStateAt = now;
       navigator.mediaSession.setPositionState({
         duration: audio.duration,
         playbackRate: audio.playbackRate || 1,
@@ -415,6 +439,7 @@
   const updateMediaSession = () => {
     if (!("mediaSession" in navigator) || !queue.length) return;
     const track = queue[index];
+    // Keep one continuous Media Session: refresh metadata in place (no clear).
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
@@ -424,7 +449,7 @@
       });
     } catch (_) { /* ignore */ }
     navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
-    updatePositionState();
+    updatePositionState(true);
   };
 
   const mediaPlay = () => {
@@ -484,21 +509,28 @@
     bind("seekto", (details) => {
       if (details && details.seekTime != null && Number.isFinite(audio.duration)) {
         audio.currentTime = details.seekTime;
-        updatePositionState();
+        updatePositionState(true);
       }
     });
-    bind("seekbackward", (details) => {
-      const off = (details && details.seekOffset) || 10;
-      audio.currentTime = Math.max(0, audio.currentTime - off);
-      updatePositionState();
-    });
-    bind("seekforward", (details) => {
-      const off = (details && details.seekOffset) || 10;
-      if (Number.isFinite(audio.duration)) {
-        audio.currentTime = Math.min(audio.duration, audio.currentTime + off);
-        updatePositionState();
-      }
-    });
+    // iOS: seekbackward/seekforward REPLACE next/prev transport buttons in Control
+    // Center / lock screen. Prefer skip track; clear seek handlers on iOS.
+    if (isIOS()) {
+      bind("seekbackward", null);
+      bind("seekforward", null);
+    } else {
+      bind("seekbackward", (details) => {
+        const off = (details && details.seekOffset) || 10;
+        audio.currentTime = Math.max(0, audio.currentTime - off);
+        updatePositionState(true);
+      });
+      bind("seekforward", (details) => {
+        const off = (details && details.seekOffset) || 10;
+        if (Number.isFinite(audio.duration)) {
+          audio.currentTime = Math.min(audio.duration, audio.currentTime + off);
+          updatePositionState(true);
+        }
+      });
+    }
   };
 
   const setRepeatUI = () => {
@@ -583,7 +615,12 @@
 
     const startPlayback = (src) => {
       if (token !== loadToken) return;
+      // Prefer continuous MediaSession: update handlers/metadata, then swap src
+      // without clearing audio.src to empty first (keeps iOS session alive).
       audio.removeAttribute("crossorigin");
+      setupMediaSessionHandlers();
+      updateMediaSession();
+      // Always assign (never removeAttribute/empty first) so MediaSession stays continuous.
       audio.src = src;
       if (autoplay) {
         userPause = false;
@@ -1275,15 +1312,23 @@
     userPause = false;
     interruptedBySystem = false;
     setPlayingUI(true);
-    updatePositionState();
+    setupMediaSessionHandlers();
+    updateMediaSession();
+    updatePositionState(true);
     if (queue[index]) {
       pushRecent(queue[index]);
       cacheAudio(queue[index].file);
     }
   });
+  // iOS often needs handlers re-bound once media is actually producing audio
+  audio.addEventListener("playing", () => {
+    setupMediaSessionHandlers();
+    updateMediaSession();
+    updatePositionState(true);
+  });
   audio.addEventListener("pause", () => {
     setPlayingUI(false);
-    updatePositionState();
+    updatePositionState(true);
     // Distinguish user pause from system interruption (incoming call, other audio, OS).
     if (userPause) {
       interruptedBySystem = false;
@@ -1318,7 +1363,7 @@
   });
   audio.addEventListener("loadedmetadata", () => {
     durationEl.textContent = formatTime(audio.duration);
-    updatePositionState();
+    updatePositionState(true);
     if (queue[index] && Number.isFinite(audio.duration)) {
       const t = queue[index];
       durationCache.set(durationKey(t), audio.duration);
@@ -1327,7 +1372,7 @@
   });
   audio.addEventListener("durationchange", () => {
     durationEl.textContent = formatTime(audio.duration);
-    updatePositionState();
+    updatePositionState(true);
     if (queue[index] && Number.isFinite(audio.duration)) {
       const t = queue[index];
       durationCache.set(durationKey(t), audio.duration);
@@ -1336,7 +1381,14 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") tryResumeAfterInterruption();
+    // Do NOT pause on hidden — keep background / lock-screen playback going.
+    if (document.visibilityState === "visible") {
+      tryResumeAfterInterruption();
+      if (!audio.paused && hasTrack) {
+        setupMediaSessionHandlers();
+        updateMediaSession();
+      }
+    }
   });
   window.addEventListener("focus", () => tryResumeAfterInterruption());
   window.addEventListener("pageshow", () => tryResumeAfterInterruption());
@@ -1376,6 +1428,12 @@
   });
 
   document.getElementById("btnRepair").addEventListener("click", async () => {
+    // Never tear down the SW while audio is mid-play without stopping first.
+    try {
+      userPause = true;
+      interruptedBySystem = false;
+      audio.pause();
+    } catch (_) { /* ignore */ }
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -1792,7 +1850,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=20").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=21").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
