@@ -16,9 +16,8 @@
  *   myMusic.drive.v1         — [{ id, url, name?, addedAt }]
  *   myMusic.driveCache.v1    — { refreshedAt, tracks: [...] }
  *   myMusic.drive.seeded     — "1" after example folder auto-add
- *   myMusic.driveApiKey      — optional override of embedded playback key
- * Embedded default key (injected at edit time) is HTTP-referrer
- * restricted to cliren.github.io — visitors need no paste for playback.
+ *   myMusic.driveApiKey      — Drive API key for playback (localStorage ONLY)
+ *   Never commit API keys. Paste into Sources; getApiKey() reads localStorage only.
  *   myMusic.drive.mediaProxy — optional proxy template with {id} or {url}
  */
 (function (global) {
@@ -30,10 +29,7 @@
   const EXAMPLE_FOLDER_ID = "1YT5oul30_jT5YoReVY9Snz9FS9KEhuAB";
   const EXAMPLE_FOLDER_NAME = "Songs-Surender";
 
-  // Injected from MY_MUSIC_DRIVE_API_KEY at edit/build time.
-  // HTTP-referrer restricted to cliren.github.io (Google Cloud Console).
-  // Prefer localStorage override when set; otherwise use this default.
-  const DEFAULT_DRIVE_API_KEY = "AIzaSyAb3nwY2s1huuDojg12qVyRW8jxJFkO_lU";
+  // NEVER commit a real key. getApiKey() reads localStorage only (Sources UI).
 
   const AUDIO_EXT_RE = /\.(mp3|m4a|wav|ogg|flac|aac)$/i;
   const CAT_MAP = { bhakti: "bhakti", folk: "folk", other: "other" };
@@ -151,7 +147,7 @@
     return { seeded: result.added, folders: result.folders, folder: result.folder };
   };
 
-  /** localStorage override only (empty when using embedded default). */
+  /** API key from localStorage only — never from a committed default. */
   const getStoredApiKey = () => {
     try {
       return (localStorage.getItem(API_KEY_STORAGE) || "").trim();
@@ -160,16 +156,13 @@
     }
   };
 
-  const hasDefaultApiKey = () => Boolean((DEFAULT_DRIVE_API_KEY || "").trim());
+  /** No embedded default (secrets must not be committed). Kept for API compat. */
+  const hasDefaultApiKey = () => false;
 
   const hasApiKeyOverride = () => Boolean(getStoredApiKey());
 
-  /** Prefer localStorage override; else embedded DEFAULT_DRIVE_API_KEY. */
-  const getApiKey = () => {
-    const override = getStoredApiKey();
-    if (override) return override;
-    return (DEFAULT_DRIVE_API_KEY || "").trim();
-  };
+  /** localStorage only (myMusic.driveApiKey via Sources). */
+  const getApiKey = () => getStoredApiKey();
 
   const setApiKey = (value) => {
     const v = String(value || "").trim();

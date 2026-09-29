@@ -94,10 +94,10 @@
           <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer). Listing needs no API key.</p>
           <p id="driveKeyStatus" class="api-key-status" aria-live="polite"></p>
           <details class="api-key-advanced" id="driveKeyAdvanced">
-            <summary class="api-key-summary">Advanced: override playback key / media proxy</summary>
-            <label class="api-key-label" for="driveApiKeyInput">Personal API key override (optional)</label>
+            <summary class="api-key-summary">Advanced: Drive API key / media proxy</summary>
+            <label class="api-key-label" for="driveApiKeyInput">Drive API key (localStorage only — never commit)</label>
             <div class="api-key-row">
-              <input type="password" id="driveApiKeyInput" class="api-key-input" placeholder="Leave blank to use site default" autocomplete="off" spellcheck="false" />
+              <input type="password" id="driveApiKeyInput" class="api-key-input" placeholder="Paste Drive API key (localStorage only)" autocomplete="off" spellcheck="false" />
               <button type="button" id="btnSaveApiKey" class="btn-text">Save</button>
               <button type="button" id="btnClearApiKey" class="btn-text">Clear override</button>
             </div>
@@ -106,7 +106,7 @@
               <input type="url" id="driveProxyInput" class="api-key-input" placeholder="https://YOUR_WORKER.workers.dev/?id={id}" autocomplete="off" spellcheck="false" />
               <button type="button" id="btnSaveProxy" class="btn-text">Save</button>
             </div>
-            <p class="api-key-hint">Site ships a referrer-restricted playback key for <code>cliren.github.io</code> (googleapis <code>alt=media</code>). Override only if you need your own key or a <strong>media proxy</strong> (<code>drive-proxy-worker.js</code>). Listing stays keyless.</p>
+            <p class="api-key-hint">Paste a referrer-restricted Drive API key (googleapis <code>alt=media</code>) here — stored only in <code>localStorage</code> (<code>myMusic.driveApiKey</code>). Never commit keys. Or set a media proxy template with <code>{id}</code>.</p>
           </details>
           <p class="sources-hint">Folders are listed keylessly via a public page reader (may be rate-limited). If listing fails, use <strong>Paste file links</strong>.</p>
         </div>

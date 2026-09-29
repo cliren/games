@@ -1,0 +1,7 @@
+
+
+# Never commit secrets / local API keys
+.env
+.env.*
+*.local.js
+secrets/

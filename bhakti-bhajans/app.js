@@ -1476,19 +1476,16 @@
   const updateDriveKeyStatus = () => {
     if (!driveKeyStatus || !window.DriveMusic) return;
     if (DriveMusic.hasApiKeyOverride && DriveMusic.hasApiKeyOverride()) {
-      driveKeyStatus.textContent = "Using your personal API key override (localStorage).";
-    } else if (DriveMusic.hasDefaultApiKey && DriveMusic.hasDefaultApiKey()) {
-      driveKeyStatus.textContent = "Playback key configured — Drive tracks play for all visitors.";
+      driveKeyStatus.textContent = "Using Drive API key from localStorage (Sources).";
     } else if (DriveMusic.getApiKey && DriveMusic.getApiKey()) {
       driveKeyStatus.textContent = "Playback key available.";
     } else {
       driveKeyStatus.textContent =
-        "No playback key — set an override below or deploy with the site default.";
+        "No playback key — paste a Drive API key below (stored only in localStorage).";
     }
   };
 
   if (window.DriveMusic) {
-    // Never put the embedded default into the input (would expose it in the DOM).
     if (driveApiKeyInput) {
       driveApiKeyInput.value =
         DriveMusic.getStoredApiKey ? DriveMusic.getStoredApiKey() : "";
@@ -1501,13 +1498,13 @@
       if (!window.DriveMusic) return;
       const raw = driveApiKeyInput ? driveApiKeyInput.value.trim() : "";
       if (!raw) {
-        setDriveStatus("Enter a key to save an override, or use Clear override.");
+        setDriveStatus("Enter a Drive API key to save, or use Clear.");
         return;
       }
       DriveMusic.setApiKey(raw);
       DriveMusic.clearBlobCache();
       updateDriveKeyStatus();
-      setDriveStatus("Personal API key override saved — try playing a Drive track.");
+      setDriveStatus("Drive API key saved to localStorage — try playing a Drive track.");
     });
   }
   if (btnClearApiKey) {
@@ -1517,11 +1514,7 @@
       if (driveApiKeyInput) driveApiKeyInput.value = "";
       DriveMusic.clearBlobCache();
       updateDriveKeyStatus();
-      setDriveStatus(
-        DriveMusic.hasDefaultApiKey && DriveMusic.hasDefaultApiKey()
-          ? "Override cleared — using site playback key."
-          : "API key cleared."
-      );
+      setDriveStatus("API key cleared from localStorage.");
     });
   }
   if (btnSaveProxy) {
