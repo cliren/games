@@ -97,13 +97,18 @@
 
 
   // Client-side unlock check (obscurity only — not cryptography; static Pages host).
-  const ptYear = () =>
-    new Intl.DateTimeFormat("en-US", {
+  const ptYearMonth = () => {
+    const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/Los_Angeles",
       year: "numeric",
-    }).format(new Date());
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === "year")?.value || "";
+    const month = parts.find((part) => part.type === "month")?.value || "";
+    return year + month;
+  };
 
-  const expectedUnlock = () => "Hyd" + ptYear();
+  const expectedUnlock = () => "Hyd" + ptYearMonth();
 
   const isGateUnlocked = () => {
     try {
@@ -118,7 +123,7 @@
 
   const persistGateUnlock = () => {
     try {
-      localStorage.setItem(GATE_KEY, JSON.stringify({ unlocked: true, year: ptYear() }));
+      localStorage.setItem(GATE_KEY, JSON.stringify({ unlocked: true, yearMonth: ptYearMonth() }));
     } catch (_) { /* quota */ }
   };
 
@@ -1117,6 +1122,14 @@
     }
   });
 
+  document.getElementById("btnLogout").addEventListener("click", () => {
+    try {
+      localStorage.removeItem(GATE_KEY);
+    } catch (_) { /* ignore */ }
+    audio.pause();
+    showGate();
+  });
+
   document.getElementById("btnRepair").addEventListener("click", async () => {
     try {
       if ("serviceWorker" in navigator) {
@@ -1133,7 +1146,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=6").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=7").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
 
@@ -17,7 +17,7 @@
     <div class="gate-panel">
       <div class="gate-glyph" aria-hidden="true">♪</div>
       <h1 id="gateTitle" class="gate-title">My Music</h1>
-      <p class="gate-hint">Password + year (PT)</p>
+      <p class="gate-hint">Code: Hyd + PT year/month (YYYYMM)</p>
       <form id="gateForm" class="gate-form" autocomplete="off">
         <label class="visually-hidden" for="gateInput">Unlock code</label>
         <input type="password" id="gateInput" class="gate-input" placeholder="Unlock code" autocomplete="current-password" enterkeyhint="go" autofocus />
@@ -33,7 +33,10 @@
       <header class="lib-header">
         <h1 class="lib-title">My Music</h1>
         <p class="lib-subtitle">Ad-free · Remote</p>
-        <button type="button" id="btnRepair" class="repair-btn" title="Clear caches and reload" aria-label="Repair">Repair</button>
+        <div class="header-actions">
+          <button type="button" id="btnLogout" class="repair-btn" title="Lock My Music again" aria-label="Logout">Logout</button>
+          <button type="button" id="btnRepair" class="repair-btn" title="Clear caches and reload" aria-label="Repair">Repair</button>
+        </div>
       </header>
 
       <div class="search-wrap">
@@ -217,6 +220,6 @@
   </dialog>
 
   <audio id="audio" preload="metadata"></audio>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
