@@ -1252,51 +1252,41 @@ body.gated .name-dialog {
   font-size: 0.82rem;
 }
 
-.api-key-label {
-  display: block;
-  margin-top: 0.85rem;
-  font-size: 0.72rem;
+.sources-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-secondary, #6e6e73);
+}
+.sources-hint strong {
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--text, #1d1d1f);
 }
-
-.api-key-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-  align-items: center;
+.drive-files-dialog .name-form {
+  max-width: min(92vw, 420px);
 }
-
-.api-key-input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--separator-strong);
+.drive-files-input {
+  width: 100%;
+  min-height: 9rem;
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border, #d2d2d7);
   border-radius: 10px;
-  padding: 0.55rem 0.7rem;
-  font-size: 0.9rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: var(--bg-elevated);
-  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  resize: vertical;
+  background: var(--surface, #fff);
+  color: var(--text, #1d1d1f);
+  box-sizing: border-box;
 }
-
-.api-key-input:focus {
+.drive-files-input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(252, 60, 68, 0.15);
+  border-color: var(--accent, #fa2d48);
+  box-shadow: 0 0 0 3px rgba(250, 45, 72, 0.15);
 }
-
-.api-key-hint {
-  margin: 0.45rem 0 0;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--text-tertiary);
-}
-
-.api-key-hint code {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
+.dialog-hint code {
+  font-size: 0.8em;
 }
 
 .dialog-hint {

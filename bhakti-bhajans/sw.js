@@ -1,15 +1,15 @@
-/* My Music — shell cache only for app assets (v8). Same-origin audio may be cached after play; cross-origin Drive media is never intercepted. */
-const SHELL_CACHE = "my-music-shell-v8";
-const AUDIO_CACHE = "my-music-audio-v8";
+/* My Music — shell cache only for app assets (v9). Same-origin audio may be cached after play; cross-origin Drive media is never intercepted. */
+const SHELL_CACHE = "my-music-shell-v9";
+const AUDIO_CACHE = "my-music-audio-v9";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=8",
+  "./styles.css?v=9",
   "./app.js",
-  "./app.js?v=8",
+  "./app.js?v=9",
   "./drive.js",
-  "./drive.js?v=8",
+  "./drive.js?v=9",
   "./library.json",
   "./playlist.json",
 ];

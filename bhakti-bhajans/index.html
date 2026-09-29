@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>My Music</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
 </head>
 <body>
 
@@ -86,17 +86,13 @@
         <div class="sources-panel" id="sourcesPanel">
           <div class="sources-toolbar">
             <button type="button" id="btnAddDriveFolder" class="btn-text primary">Add Drive folder</button>
+            <button type="button" id="btnPasteFileLinks" class="btn-text">Paste file links</button>
             <button type="button" id="btnRefreshDrive" class="btn-text">Refresh library</button>
           </div>
           <p id="driveRefreshStatus" class="sources-status" aria-live="polite"></p>
           <ul id="driveFolderList" class="drive-folder-list" role="list"></ul>
-          <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer).</p>
-          <label class="api-key-label" for="driveApiKeyInput">Drive API key (optional)</label>
-          <div class="api-key-row">
-            <input type="password" id="driveApiKeyInput" class="api-key-input" placeholder="AIza… for listing public folders" autocomplete="off" spellcheck="false" />
-            <button type="button" id="btnSaveApiKey" class="btn-text">Save</button>
-          </div>
-          <p class="api-key-hint">Listing needs a free Google Cloud key with Drive API on, HTTP referrer restricted to <code>cliren.github.io</code>. Playback of public files works without a key.</p>
+          <p id="driveFoldersEmpty" class="empty-hint sources-empty">No Drive folders yet. Add a shared folder link (Anyone with the link · Viewer). No API key needed.</p>
+          <p class="sources-hint">Folders are listed keylessly via a public page reader (may be rate-limited). If listing fails, use <strong>Paste file links</strong>. Audio streams from Drive — nothing is uploaded to GitHub.</p>
         </div>
       </div>
 
@@ -240,7 +236,7 @@
   <dialog id="driveFolderDialog" class="name-dialog">
     <form method="dialog" id="driveFolderForm" class="name-form">
       <h3 id="driveFolderDialogTitle">Add Drive folder</h3>
-      <p class="dialog-hint">Paste a shared folder URL (Anyone with the link · Viewer).</p>
+      <p class="dialog-hint">Paste a shared folder URL (Anyone with the link · Viewer). No API key.</p>
       <input type="url" id="driveFolderInput" class="name-input" placeholder="https://drive.google.com/drive/folders/…" autocomplete="off" spellcheck="false" />
       <div class="name-actions">
         <button type="submit" value="cancel" class="btn-text">Cancel</button>
@@ -249,8 +245,20 @@
     </form>
   </dialog>
 
+  <dialog id="driveFilesDialog" class="name-dialog drive-files-dialog">
+    <form method="dialog" id="driveFilesForm" class="name-form">
+      <h3 id="driveFilesDialogTitle">Paste Drive file links</h3>
+      <p class="dialog-hint">One per line: <code>https://drive.google.com/file/d/…/view</code> or <code>Name.mp3 | url</code>. Files must be shared Anyone with the link.</p>
+      <textarea id="driveFilesInput" class="drive-files-input" rows="8" placeholder="https://drive.google.com/file/d/FILE_ID/view&#10;Bhajan.mp3 | https://drive.google.com/file/d/FILE_ID/view" spellcheck="false"></textarea>
+      <div class="name-actions">
+        <button type="submit" value="cancel" class="btn-text">Cancel</button>
+        <button type="submit" value="ok" class="btn-text primary" id="driveFilesOk">Import</button>
+      </div>
+    </form>
+  </dialog>
+
   <audio id="audio" preload="metadata"></audio>
-  <script src="drive.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="drive.js?v=9"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

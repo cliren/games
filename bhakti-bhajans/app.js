@@ -1111,6 +1111,8 @@
     if (nameDialog.open) return;
     const driveDlg = document.getElementById("driveFolderDialog");
     if (driveDlg && driveDlg.open) return;
+    const driveFilesDlg = document.getElementById("driveFilesDialog");
+    if (driveFilesDlg && driveFilesDlg.open) return;
     if (e.code === "Escape" && !npSheet.hidden) {
       closeSheet();
       return;
@@ -1156,14 +1158,16 @@
   });
 
 
-  // ——— Google Drive sources ———
+  // ——— Google Drive sources (keyless) ———
   const driveFolderListEl = document.getElementById("driveFolderList");
   const driveFoldersEmpty = document.getElementById("driveFoldersEmpty");
   const driveRefreshStatus = document.getElementById("driveRefreshStatus");
-  const driveApiKeyInput = document.getElementById("driveApiKeyInput");
   const driveFolderDialog = document.getElementById("driveFolderDialog");
   const driveFolderInput = document.getElementById("driveFolderInput");
   const driveFolderForm = document.getElementById("driveFolderForm");
+  const driveFilesDialog = document.getElementById("driveFilesDialog");
+  const driveFilesInput = document.getElementById("driveFilesInput");
+  const driveFilesForm = document.getElementById("driveFilesForm");
   let driveRefreshing = false;
 
   const setDriveStatus = (text, isError) => {
@@ -1221,11 +1225,10 @@
     const seed = library.filter((t) => t.source !== "drive");
     const merged = DriveMusic.mergeLibraries(seed, driveTracks || []);
     library = normalizeTracks(merged);
-    // Refresh playback URLs for drive tracks with current key preference
-    const key = DriveMusic.getApiKey();
+    // Refresh playback URLs for drive tracks (usercontent, keyless)
     library = library.map((t) => {
       if (t.source === "drive" && t.driveFileId) {
-        return { ...t, file: DriveMusic.playbackUrl(t.driveFileId, key) };
+        return { ...t, file: DriveMusic.playbackUrl(t.driveFileId) };
       }
       return t;
     });
@@ -1334,24 +1337,52 @@
     });
   }
 
-  const btnAddDriveFolder = document.getElementById("btnAddDriveFolder");
-  if (btnAddDriveFolder) btnAddDriveFolder.addEventListener("click", openDriveFolderDialog);
-  const btnRefreshDrive = document.getElementById("btnRefreshDrive");
-  if (btnRefreshDrive) btnRefreshDrive.addEventListener("click", () => refreshDriveLibrary());
-  const btnSaveApiKey = document.getElementById("btnSaveApiKey");
-  if (btnSaveApiKey) {
-    btnSaveApiKey.addEventListener("click", () => {
-      if (!window.DriveMusic) return;
-      DriveMusic.setApiKey(driveApiKeyInput ? driveApiKeyInput.value : "");
-      setDriveStatus(DriveMusic.getApiKey() ? "API key saved. Tap Refresh library." : "API key cleared.");
-      // Update playback URLs if key changed
-      applyDriveTracks(DriveMusic.loadCache().tracks || []);
+  const openDriveFilesDialog = () => {
+    if (!driveFilesDialog || !driveFilesInput) return;
+    driveFilesInput.value = "";
+    if (typeof driveFilesDialog.showModal === "function") {
+      driveFilesDialog.showModal();
+      driveFilesInput.focus();
+    } else {
+      const v = window.prompt("Paste Drive file links (one per line)");
+      if (v) handleImportFileLinks(v);
+    }
+  };
+
+  const handleImportFileLinks = (raw) => {
+    if (!window.DriveMusic) return;
+    try {
+      const { tracks, added, total } = DriveMusic.importFileLinks(raw, "bhakti");
+      applyDriveTracks(tracks);
+      setDriveStatus(
+        `Imported ${added} new file${added === 1 ? "" : "s"} (${total} in paste). ${tracks.length} Drive track${tracks.length === 1 ? "" : "s"} total.`
+      );
+    } catch (err) {
+      setDriveStatus(err.message || String(err), true);
+    }
+  };
+
+  if (driveFilesForm) {
+    driveFilesForm.addEventListener("submit", (e) => {
+      const submitter = e.submitter;
+      const ok = submitter && submitter.value === "ok";
+      const val = ok && driveFilesInput ? driveFilesInput.value.trim() : "";
+      if (ok && val) {
+        setTimeout(() => handleImportFileLinks(val), 0);
+      }
     });
   }
 
+  const btnAddDriveFolder = document.getElementById("btnAddDriveFolder");
+  if (btnAddDriveFolder) btnAddDriveFolder.addEventListener("click", openDriveFolderDialog);
+  const btnPasteFileLinks = document.getElementById("btnPasteFileLinks");
+  if (btnPasteFileLinks) btnPasteFileLinks.addEventListener("click", openDriveFilesDialog);
+  const btnRefreshDrive = document.getElementById("btnRefreshDrive");
+  if (btnRefreshDrive) btnRefreshDrive.addEventListener("click", () => refreshDriveLibrary());
+
   const initDriveUi = () => {
     if (!window.DriveMusic) return;
-    if (driveApiKeyInput) driveApiKeyInput.value = DriveMusic.getApiKey();
+    const seed = DriveMusic.ensureExampleFolder();
     renderDriveFolders();
     const cache = DriveMusic.loadCache();
     if (cache.tracks && cache.tracks.length) {
@@ -1359,14 +1390,14 @@
       const when = cache.refreshedAt ? ` · cached ${cache.refreshedAt.slice(0, 10)}` : "";
       setDriveStatus(`${cache.tracks.length} Drive track${cache.tracks.length === 1 ? "" : "s"}${when}`);
     } else if (DriveMusic.loadFolders().length) {
-      // Auto-refresh when folders configured but cache empty
-      refreshDriveLibrary({ silent: true });
+      if (seed.seeded) setDriveStatus("Example folder added. Listing…");
+      refreshDriveLibrary({ silent: !seed.seeded });
     }
   };
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=8").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=9").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

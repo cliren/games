@@ -6,76 +6,52 @@ Ad-free static music library for GitHub Pages. Apple Music–like **Library** ho
 
 ## Features
 
-- **Library home** — Playlists, Songs, Recently Played, Categories (Bhakti / Folk / Other)
-- **Google Drive folders** — paste shared folder URLs (Anyone with the link · Viewer), Refresh to rebuild the library
-- **Bottom mini-bar** + tap → **Now Playing** sheet (seek, prev/next, shuffle, repeat)
-- **Sort** Name | Date on list screens
-- **Shuffle** / **repeat**; custom playlists and recently played (`localStorage` `myMusic.v1`)
-- Media Session (lock screen / headset)
-- Service worker caches **shell only** aggressively; same-origin audio after play; **does not** cache Drive media
-- Keyboard: `Space` play/pause, `←`/`→` seek 5s, `Shift+←`/`→` prev/next
-- Unlock gate: `Hyd` + PT year/month (`YYYYMM`); **Logout** / **Repair**
+- **Library** home with Songs / Recently Played / Bhakti / Folk / Other
+- **Google Drive folders** — paste shared folder URLs (Anyone with the link · Viewer), Refresh to rebuild the library — **no API key**
+- **Paste file links** fallback when folder listing is blocked or rate-limited
+- Stream playback from Drive (`drive.usercontent.google.com`) — files stay on Drive
+- Local search, shuffle / repeat, custom playlists, recently played (`localStorage` `myMusic.v1`)
+- Whole-app unlock gate; service worker caches **shell only**; Drive media is never cached
 
-## Google Drive import
+## Google Drive (keyless)
 
 1. Share a Drive folder as **Anyone with the link → Viewer**.
 2. In **Sources**, tap **Add Drive folder** and paste the URL  
    (e.g. `https://drive.google.com/drive/folders/1YT5oul30_jT5YoReVY9Snz9FS9KEhuAB`).
-3. Optional but recommended for listing: create a free Google Cloud **API key**, enable **Google Drive API**, restrict by HTTP referrer to `cliren.github.io/*`, paste it under **Drive API key**, Save.
-4. Tap **Refresh library**. Tracks appear in Songs / Categories / Search / playlists.
+3. Tap **Refresh library**. Listing uses Google’s public `embeddedfolderview` page via a CORS-friendly reader proxy (jina.ai, with allorigins fallback). No Google Cloud project or API key.
+4. If listing fails (proxy outage / rate limit), tap **Paste file links** and paste one `https://drive.google.com/file/d/…/view` URL per line (optional `Name.mp3 | url`).
 
-**How it works**
-
-| Action | Needs API key? | Endpoint |
+| Action | Needs API key? | How |
 | --- | --- | --- |
-| List folder files | **Yes** (reliable) | `GET https://www.googleapis.com/drive/v3/files?q='FOLDER_ID'+in+parents&key=…` |
-| Play a public file | **No** | `https://drive.usercontent.google.com/download?id=FILE_ID&export=download` (or Drive `alt=media` when a key is set) |
-
-Without an API key, Refresh will explain that listing is blocked (Google returns 403 for unregistered callers). Playback of already-known public file IDs still works without a key.
+| List folder files | **No** | Proxy fetch of `embeddedfolderview?id=FOLDER` → parse entry ids/names |
+| Play / stream | **No** | `https://drive.usercontent.google.com/download?id=FILE&export=download` |
 
 **Categories:** files in the root of a linked folder → `bhakti`. One-level subfolders named `Bhakti` / `Folk` / `Other` (any case) assign that category.
 
-**Persistence**
+An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remove it anytime.
+
+### Storage
 
 - Folder list: `localStorage` `myMusic.drive.v1` → `[{ id, url, name?, addedAt }]`
-- API key: `myMusic.driveApiKey`
 - Cached Drive track metadata: `myMusic.driveCache.v1`
-- In-repo seed tracks stay `source: "local"`; Drive tracks are `source: "drive"` and merge by `id`.
+- Example seed flag: `myMusic.drive.seeded`
 
-## Data (seed tracks)
+## Local seed tracks
 
-Optional local seeds in `library.json`:
+Optional in-repo files via `library.json` + `audio/`. Prefer Drive for new music so the repo stays small.
 
-```json
-{
-  "tracks": [
-    {
-      "id": "rama-nama",
-      "title": "Rama Nama",
-      "artist": "Optional artist",
-      "file": "audio/rama-nama.mp3",
-      "category": "bhakti",
-      "dateAdded": "2026-09-28",
-      "source": "local"
-    }
-  ]
-}
-```
+## Unlock
 
-Prefer Drive for new audio so large files never land on GitHub.
+Year-based gate (Pacific Time). See app copy for the current prompt.
 
-## Local preview
+## Develop
 
 ```bash
 cd bhakti-bhajans
 python3 -m http.server 8080
 ```
 
-Open http://localhost:8080 — HTTPS or localhost is needed for the service worker. For Drive listing from localhost, add `http://localhost:8080/*` to the API key referrer restrictions.
-
-## Stack
-
-Plain HTML, CSS, and vanilla JavaScript (`app.js` + `drive.js`). No build step, no frameworks, no CDN fonts, no ads.
+Open http://localhost:8080 — HTTPS or localhost is needed for the service worker.
 
 ## License
 
