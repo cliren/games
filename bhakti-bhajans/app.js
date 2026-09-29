@@ -90,6 +90,10 @@
   /** Tracks currently shown in list view (for shuffle play) */
   let currentListTracks = [];
   let hasTrack = false;
+  /** User hit pause (UI / lock-screen / keyboard) — do not auto-resume after calls */
+  let userPause = false;
+  /** System paused us (call, other audio, OS) while we still wanted to play */
+  let interruptedBySystem = false;
 
   const uid = () =>
     "pl_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -163,6 +167,8 @@
         if (DriveMusic.clearBlobCache) DriveMusic.clearBlobCache();
       }
     } catch (_) { /* ignore */ }
+    userPause = true;
+    interruptedBySystem = false;
     audio.pause();
     showGate();
   };
@@ -352,53 +358,147 @@
     });
   };
 
+  let mediaArtworkCache = null;
+  const mediaArtwork = () => {
+    if (mediaArtworkCache) return mediaArtworkCache;
+    const artwork = [];
+    try {
+      // PNG data URLs work on lock screens; SVG is ignored on many mobile OSes.
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#f5e6ea";
+        ctx.fillRect(0, 0, 512, 512);
+        ctx.fillStyle = "#fc3c44";
+        ctx.font = "220px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("♪", 256, 280);
+        const png = canvas.toDataURL("image/png");
+        [96, 128, 192, 256, 384, 512].forEach((size) => {
+          artwork.push({ src: png, sizes: `${size}x${size}`, type: "image/png" });
+        });
+      }
+    } catch (_) { /* ignore */ }
+    if (!artwork.length) {
+      try {
+        const abs = new URL(
+          "data:image/svg+xml," +
+            encodeURIComponent(
+              `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="64" fill="#f5e6ea"/><text x="256" y="310" text-anchor="middle" font-size="220" fill="#fc3c44">♪</text></svg>`
+            ),
+          location.href
+        ).href;
+        artwork.push({ src: abs, sizes: "512x512", type: "image/svg+xml" });
+      } catch (_) { /* ignore */ }
+    }
+    mediaArtworkCache = artwork;
+    return artwork;
+  };
+
+  const updatePositionState = () => {
+    if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") {
+      return;
+    }
+    try {
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      navigator.mediaSession.setPositionState({
+        duration: audio.duration,
+        playbackRate: audio.playbackRate || 1,
+        position: Math.min(Math.max(0, audio.currentTime), audio.duration),
+      });
+    } catch (_) { /* unsupported / invalid state */ }
+  };
+
   const updateMediaSession = () => {
     if (!("mediaSession" in navigator) || !queue.length) return;
     const track = queue[index];
-    const artwork = [];
     try {
-      const abs = new URL(
-        "data:image/svg+xml," +
-          encodeURIComponent(
-            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="64" fill="#f5e6ea"/><text x="256" y="310" text-anchor="middle" font-size="220" fill="#fc3c44">♪</text></svg>`
-          ),
-        location.href
-      ).href;
-      artwork.push({ src: abs, sizes: "512x512", type: "image/svg+xml" });
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.artist || "My Music",
+        album: "My Music",
+        artwork: mediaArtwork(),
+      });
     } catch (_) { /* ignore */ }
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title,
-      artist: track.artist || "My Music",
-      album: "My Music",
-      artwork,
-    });
+    navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
+    updatePositionState();
+  };
+
+  const mediaPlay = () => {
+    userPause = false;
+    interruptedBySystem = false;
+    return audio.play().catch(() => setPlayingUI(false));
+  };
+
+  const mediaPause = () => {
+    userPause = true;
+    interruptedBySystem = false;
+    audio.pause();
+  };
+
+  const tryResumeAfterInterruption = () => {
+    if (!interruptedBySystem || userPause || !hasTrack) return;
+    if (!audio.paused) {
+      interruptedBySystem = false;
+      return;
+    }
+    if (!audio.src) return;
+    audio
+      .play()
+      .then(() => {
+        interruptedBySystem = false;
+      })
+      .catch(() => {
+        /* keep flag — next visibility/focus may retry */
+      });
   };
 
   const setupMediaSessionHandlers = () => {
     if (!("mediaSession" in navigator)) return;
-    try {
-      navigator.mediaSession.setActionHandler("play", () => {
-        audio.play().catch(() => setPlayingUI(false));
-      });
-      navigator.mediaSession.setActionHandler("pause", () => audio.pause());
-      navigator.mediaSession.setActionHandler("previoustrack", () => loadTrack(index - 1, true));
-      navigator.mediaSession.setActionHandler("nexttrack", () => loadTrack(index + 1, true));
-      navigator.mediaSession.setActionHandler("seekto", (details) => {
-        if (details.seekTime != null && Number.isFinite(audio.duration)) {
-          audio.currentTime = details.seekTime;
-        }
-      });
-      navigator.mediaSession.setActionHandler("seekbackward", (details) => {
-        const off = details.seekOffset || 5;
-        audio.currentTime = Math.max(0, audio.currentTime - off);
-      });
-      navigator.mediaSession.setActionHandler("seekforward", (details) => {
-        const off = details.seekOffset || 5;
-        if (Number.isFinite(audio.duration)) {
-          audio.currentTime = Math.min(audio.duration, audio.currentTime + off);
-        }
-      });
-    } catch (_) { /* some handlers unsupported */ }
+    const bind = (action, handler) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (_) {
+        /* action unsupported on this browser */
+      }
+    };
+    bind("play", () => {
+      mediaPlay();
+    });
+    bind("pause", () => {
+      mediaPause();
+    });
+    bind("previoustrack", () => {
+      userPause = false;
+      interruptedBySystem = false;
+      loadTrack(index - 1, true);
+    });
+    bind("nexttrack", () => {
+      userPause = false;
+      interruptedBySystem = false;
+      loadTrack(index + 1, true);
+    });
+    bind("seekto", (details) => {
+      if (details && details.seekTime != null && Number.isFinite(audio.duration)) {
+        audio.currentTime = details.seekTime;
+        updatePositionState();
+      }
+    });
+    bind("seekbackward", (details) => {
+      const off = (details && details.seekOffset) || 10;
+      audio.currentTime = Math.max(0, audio.currentTime - off);
+      updatePositionState();
+    });
+    bind("seekforward", (details) => {
+      const off = (details && details.seekOffset) || 10;
+      if (Number.isFinite(audio.duration)) {
+        audio.currentTime = Math.min(audio.duration, audio.currentTime + off);
+        updatePositionState();
+      }
+    });
   };
 
   const setRepeatUI = () => {
@@ -486,6 +586,8 @@
       audio.removeAttribute("crossorigin");
       audio.src = src;
       if (autoplay) {
+        userPause = false;
+        interruptedBySystem = false;
         audio.play().catch(() => setPlayingUI(false));
       }
     };
@@ -564,9 +666,9 @@
   const playPause = () => {
     if (!queue.length) return;
     if (audio.paused) {
-      audio.play().catch(() => setPlayingUI(false));
+      mediaPlay();
     } else {
-      audio.pause();
+      mediaPause();
     }
   };
 
@@ -639,10 +741,12 @@
     btn.addEventListener("click", () => {
       const source = opts.sourceList || currentListTracks;
       if (queue[index] && queue[index].id === track.id && !audio.paused) {
-        audio.pause();
+        mediaPause();
       } else if (queue[index] && queue[index].id === track.id) {
-        audio.play().catch(() => setPlayingUI(false));
+        mediaPlay();
       } else {
+        userPause = false;
+        interruptedBySystem = false;
         playTrackFromList(track, source);
       }
     });
@@ -1168,16 +1272,31 @@
   });
 
   audio.addEventListener("play", () => {
+    userPause = false;
+    interruptedBySystem = false;
     setPlayingUI(true);
+    updatePositionState();
     if (queue[index]) {
       pushRecent(queue[index]);
       cacheAudio(queue[index].file);
     }
   });
-  audio.addEventListener("pause", () => setPlayingUI(false));
+  audio.addEventListener("pause", () => {
+    setPlayingUI(false);
+    updatePositionState();
+    // Distinguish user pause from system interruption (incoming call, other audio, OS).
+    if (userPause) {
+      interruptedBySystem = false;
+      return;
+    }
+    if (!hasTrack || !audio.src || audio.ended) return;
+    interruptedBySystem = true;
+  });
   audio.addEventListener("ended", () => {
+    interruptedBySystem = false;
     if (repeatMode === "one") {
       audio.currentTime = 0;
+      userPause = false;
       audio.play().catch(() => setPlayingUI(false));
       return;
     }
@@ -1195,9 +1314,11 @@
     seek.value = Math.round((audio.currentTime / audio.duration) * 1000) || 0;
     currentTimeEl.textContent = formatTime(audio.currentTime);
     updateSeekFill();
+    updatePositionState();
   });
   audio.addEventListener("loadedmetadata", () => {
     durationEl.textContent = formatTime(audio.duration);
+    updatePositionState();
     if (queue[index] && Number.isFinite(audio.duration)) {
       const t = queue[index];
       durationCache.set(durationKey(t), audio.duration);
@@ -1206,12 +1327,19 @@
   });
   audio.addEventListener("durationchange", () => {
     durationEl.textContent = formatTime(audio.duration);
+    updatePositionState();
     if (queue[index] && Number.isFinite(audio.duration)) {
       const t = queue[index];
       durationCache.set(durationKey(t), audio.duration);
       writeRowDuration(t.file, audio.duration);
     }
   });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") tryResumeAfterInterruption();
+  });
+  window.addEventListener("focus", () => tryResumeAfterInterruption());
+  window.addEventListener("pageshow", () => tryResumeAfterInterruption());
 
   document.addEventListener("keydown", (e) => {
     if (document.body.classList.contains("gated")) return;
@@ -1379,6 +1507,8 @@
   const stopIfTrackGone = (removedId) => {
     const playingId = queue[index] && queue[index].id;
     if (removedId && playingId === removedId) {
+      userPause = true;
+      interruptedBySystem = false;
       audio.pause();
       audio.removeAttribute("src");
       try {
@@ -1444,6 +1574,8 @@
     const msg =
       "Clear all songs from this browser? This removes imported Drive tracks, recently played, and playlist song lists. Saved Drive folders and your unlock password are kept — use Refresh to re-import. Use Lock to clear the password.";
     if (!window.confirm(msg)) return;
+    userPause = true;
+    interruptedBySystem = false;
     audio.pause();
     try {
       audio.removeAttribute("src");
@@ -1660,7 +1792,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=19").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=20").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

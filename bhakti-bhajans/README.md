@@ -13,6 +13,8 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 - Local search, shuffle / repeat, custom playlists, recently played (`localStorage` `myMusic.v1`)
 - **Clear library** (Sources) wipes imported songs, recently played, playlist contents, and Drive track/blob cache after confirm — keeps folder URLs and unlock password; per-song **Clear** on Songs / Recently Played
 - Whole-app unlock gate; service worker caches **shell only**; Drive media is never cached
+- **Call interruption resume** — after a phone call (or other system audio pause), playback auto-resumes unless you paused yourself
+- **Lock-screen controls** via Media Session (play / pause / previous / next / seek); position updates while playing
 
 ## Google Drive (keyless)
 
@@ -27,7 +29,7 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 | List folder files | **Password preferred** | Drive `files.list` when unlocked (complete). Keyless: merge jina/allorigins of `embeddedfolderview` (jina alone often truncates) |
 | Play | **API key or media proxy** | Browser → blob URL. Direct `drive.usercontent` is blocked cross-site (see below). |
 
-**Why playback needs a password or proxy (v11–v19):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
+**Why playback needs a password or proxy (v11–v20):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
 
 **Playback options (Sources):**
 1. **Drive API key** — `googleapis.com/drive/v3/files/ID?alt=media&key=…` (CORS works). Restrict the key’s HTTP referrer to `https://cliren.github.io/*`. Paste into **Sources** only — stored in `localStorage` `myMusic.driveApiKey`. **Never commit API keys** (no embedded default in `drive.js`).
@@ -56,6 +58,13 @@ An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remo
 ## Unlock
 
 The unlock **password** is stored in this browser (`myMusic.driveApiKey`). Unlock validates it with Google Drive, then remembers it for later visits. **Lock** clears the password and returns to the lock screen. **Clear library** does **not** clear the password — only Lock does. Refresh uses the unlock password.
+
+
+## Background / lock screen (mobile)
+
+Media Session keeps play/pause/skip on the lock screen while the `<audio>` element is the active media source. After an incoming call, the player marks a system interruption (not a user pause) and calls `audio.play()` again when the page becomes visible/focused.
+
+**iOS Safari limits:** Background/lock controls need a prior user-gesture start; artwork works best as PNG (SVG is often ignored). Auto-resume after a call is best-effort — iOS may still require a tap if the tab was fully suspended. Add to Home Screen (standalone) improves reliability vs a background Safari tab.
 
 ## Develop
 
