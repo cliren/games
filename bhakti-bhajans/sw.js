@@ -1,15 +1,14 @@
-/* My Music — shell cache only for app assets (v9). Same-origin audio may be cached after play; cross-origin Drive media is never intercepted. */
-const SHELL_CACHE = "my-music-shell-v9";
-const AUDIO_CACHE = "my-music-audio-v9";
+/* My Music — shell cache only (v10). No local audio/; Drive media is never intercepted. */
+const SHELL_CACHE = "my-music-shell-v10";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./styles.css?v=9",
+  "./styles.css?v=10",
   "./app.js",
-  "./app.js?v=9",
+  "./app.js?v=10",
   "./drive.js",
-  "./drive.js?v=9",
+  "./drive.js?v=10",
   "./library.json",
   "./playlist.json",
 ];
@@ -23,11 +22,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((k) => k !== SHELL_CACHE && k !== AUDIO_CACHE)
-          .map((k) => caches.delete(k))
-      )
+      Promise.all(keys.filter((k) => k !== SHELL_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -37,32 +32,10 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // Never try to cache or proxy Google Drive / API audio (CORS, redirects, size).
+  // Never proxy/cache cross-origin (Drive usercontent, listing proxies, etc.)
   if (url.origin !== self.location.origin) return;
 
-  const path = url.pathname;
-  const isAudio = /\.(mp3|m4a|ogg|wav|aac|flac)(\?|$)/i.test(path) || path.includes("/audio/");
-
-  if (isAudio) {
-    event.respondWith(
-      caches.open(AUDIO_CACHE).then(async (cache) => {
-        const cached = await cache.match(req);
-        if (cached) return cached;
-        try {
-          const res = await fetch(req);
-          if (res.ok) cache.put(req, res.clone());
-          return res;
-        } catch (err) {
-          const fallback = await cache.match(req);
-          if (fallback) return fallback;
-          throw err;
-        }
-      })
-    );
-    return;
-  }
-
-  // Shell / JSON: network-first with cache fallback
+  // Network-first shell / JSON
   event.respondWith(
     fetch(req)
       .then((res) => {
@@ -76,25 +49,4 @@ self.addEventListener("fetch", (event) => {
         caches.match(req).then((cached) => cached || caches.match("./index.html"))
       )
   );
-});
-
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "CACHE_AUDIO" && event.data.url) {
-    const url = event.data.url;
-    let parsed;
-    try {
-      parsed = new URL(url, self.location.href);
-    } catch (_) {
-      return;
-    }
-    if (parsed.origin !== self.location.origin) return;
-    caches.open(AUDIO_CACHE).then(async (cache) => {
-      const hit = await cache.match(url);
-      if (hit) return;
-      try {
-        const res = await fetch(url);
-        if (res.ok) await cache.put(url, res);
-      } catch (_) { /* offline or blocked */ }
-    });
-  }
 });

@@ -1,6 +1,6 @@
 # My Music
 
-Ad-free static music library for GitHub Pages. Apple Music–like **Library** home with a bottom mini-bar and Now Playing sheet. Seed tracks can live in-repo; additional audio is **streamed from Google Drive** (nothing new pushed to GitHub). URL path stays `bhakti-bhajans/` for stability; the UI is branded **My Music**.
+Ad-free static music player for GitHub Pages. Apple Music–like **Library** home with a bottom mini-bar and Now Playing sheet. Audio is **streamed from Google Drive** (nothing hosted in this repo). URL path stays `bhakti-bhajans/` for stability; the UI is branded **My Music**.
 
 **Live:** https://cliren.github.io/games/bhakti-bhajans/
 
@@ -9,7 +9,7 @@ Ad-free static music library for GitHub Pages. Apple Music–like **Library** ho
 - **Library** home with Songs / Recently Played / Bhakti / Folk / Other
 - **Google Drive folders** — paste shared folder URLs (Anyone with the link · Viewer), Refresh to rebuild the library — **no API key**
 - **Paste file links** fallback when folder listing is blocked or rate-limited
-- Stream playback from Drive (`drive.usercontent.google.com`) — files stay on Drive
+- Drive playback via CORS `fetch` → `blob:` URL (raw `<audio src>` is blocked by Drive’s `Cross-Origin-Resource-Policy: same-site`)
 - Local search, shuffle / repeat, custom playlists, recently played (`localStorage` `myMusic.v1`)
 - Whole-app unlock gate; service worker caches **shell only**; Drive media is never cached
 
@@ -24,7 +24,9 @@ Ad-free static music library for GitHub Pages. Apple Music–like **Library** ho
 | Action | Needs API key? | How |
 | --- | --- | --- |
 | List folder files | **No** | Proxy fetch of `embeddedfolderview?id=FOLDER` → parse entry ids/names |
-| Play / stream | **No** | `https://drive.usercontent.google.com/download?id=FILE&export=download` |
+| Play | **No** | `drive.usercontent.google.com/download?id=FILE&export=download&confirm=t` → CORS fetch → blob URL for `<audio>` |
+
+**Why blob URLs?** Public Drive downloads return `audio/mpeg`, `Access-Control-Allow-Origin: *`, and `Accept-Ranges: bytes`, but also `Cross-Origin-Resource-Policy: same-site` and `Content-Disposition: attachment`. Media elements use no-cors mode, so the browser blocks the response from github.io. A `fetch(..., { mode: "cors" })` is allowed; we turn the body into a same-origin `blob:` URL.
 
 **Categories:** files in the root of a linked folder → `bhakti`. One-level subfolders named `Bhakti` / `Folk` / `Other` (any case) assign that category.
 
@@ -35,10 +37,6 @@ An example folder (`Songs-Surender`) is auto-linked on first visit; you can Remo
 - Folder list: `localStorage` `myMusic.drive.v1` → `[{ id, url, name?, addedAt }]`
 - Cached Drive track metadata: `myMusic.driveCache.v1`
 - Example seed flag: `myMusic.drive.seeded`
-
-## Local seed tracks
-
-Optional in-repo files via `library.json` + `audio/`. Prefer Drive for new music so the repo stays small.
 
 ## Unlock
 

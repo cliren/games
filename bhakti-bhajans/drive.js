@@ -135,11 +135,95 @@
     return { seeded: result.added, folders: result.folders, folder: result.folder };
   };
 
-  /** Playback URL for publicly shared files — no API key. */
+  /**
+   * Direct download URL for publicly shared files (no API key).
+   * Returns audio/mpeg + ACAO:* + Range, but also CORP:same-site and
+   * Content-Disposition:attachment — browsers block no-cors <audio src>,
+   * so play via fetch(mode:"cors") → blob URL (see fetchPlayableUrl).
+   * docs.google.com/uc and drive.google.com/uc currently 403.
+   */
   const playbackUrl = (fileId) =>
     `https://drive.usercontent.google.com/download?id=${encodeURIComponent(
       fileId
-    )}&export=download`;
+    )}&export=download&confirm=t`;
+
+  /** In-memory blob: URL cache keyed by Drive file id (LRU-ish, max 4). */
+  const blobUrlCache = new Map(); // fileId -> { url, ts }
+  const BLOB_CACHE_MAX = 4;
+
+  const revokeBlobUrl = (url) => {
+    if (!url || !String(url).startsWith("blob:")) return;
+    try {
+      URL.revokeObjectURL(url);
+    } catch (_) { /* ignore */ }
+  };
+
+  const trimBlobCache = () => {
+    while (blobUrlCache.size > BLOB_CACHE_MAX) {
+      let oldestKey = null;
+      let oldestTs = Infinity;
+      for (const [k, v] of blobUrlCache) {
+        if (v.ts < oldestTs) {
+          oldestTs = v.ts;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey == null) break;
+      const entry = blobUrlCache.get(oldestKey);
+      blobUrlCache.delete(oldestKey);
+      if (entry) revokeBlobUrl(entry.url);
+    }
+  };
+
+  const getCachedBlobUrl = (fileId) => {
+    const entry = blobUrlCache.get(fileId);
+    if (!entry) return null;
+    entry.ts = Date.now();
+    return entry.url;
+  };
+
+  /**
+   * CORS-fetch a Drive file into a blob: URL usable by <audio>.
+   * Needed because usercontent responds with cross-origin-resource-policy:
+   * same-site, which blocks media-element (no-cors) loads from github.io.
+   */
+  const fetchPlayableUrl = async (fileId, { signal } = {}) => {
+    if (!fileId) throw new Error("Missing Drive file id");
+    const cached = getCachedBlobUrl(fileId);
+    if (cached) return cached;
+
+    const url = playbackUrl(fileId);
+    const res = await fetch(url, {
+      method: "GET",
+      mode: "cors",
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Drive download failed (HTTP ${res.status})`);
+    }
+    const type = (res.headers.get("content-type") || "").split(";")[0].trim();
+    if (type && !/^audio\//i.test(type) && type !== "application/octet-stream") {
+      // Virus-scan HTML interstitial or wrong content
+      throw new Error(`Unexpected Drive content-type: ${type || "unknown"}`);
+    }
+    const buf = await res.arrayBuffer();
+    if (!buf || buf.byteLength < 64) {
+      throw new Error("Drive download returned empty body");
+    }
+    const mime = /^audio\//i.test(type) ? type : "audio/mpeg";
+    const blob = new Blob([buf], { type: mime });
+    const objectUrl = URL.createObjectURL(blob);
+    blobUrlCache.set(fileId, { url: objectUrl, ts: Date.now() });
+    trimBlobCache();
+    return objectUrl;
+  };
+
+  const clearBlobCache = () => {
+    for (const entry of blobUrlCache.values()) revokeBlobUrl(entry.url);
+    blobUrlCache.clear();
+  };
 
   const categoryFromFolderName = (name) => {
     const key = String(name || "")
@@ -556,6 +640,9 @@
     loadCache,
     saveCache,
     playbackUrl,
+    fetchPlayableUrl,
+    getCachedBlobUrl,
+    clearBlobCache,
     refreshAll,
     importFileLinks,
     parseFileLinkList,

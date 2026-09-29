@@ -440,12 +440,28 @@
     miniBar.hidden = false;
   };
 
+  let loadToken = 0;
+  let loadAbort = null;
+
+  const isDriveTrack = (track) =>
+    !!(track && (track.source === "drive" || track.driveFileId));
+
+  const durationKey = (track) =>
+    (track && (track.driveFileId || track.id || track.file)) || "";
+
   const loadTrack = (i, autoplay = false) => {
     if (!queue.length) return;
     index = ((i % queue.length) + queue.length) % queue.length;
     const track = queue[index];
     hasTrack = true;
-    audio.src = track.file;
+    const token = ++loadToken;
+    if (loadAbort) {
+      try {
+        loadAbort.abort();
+      } catch (_) { /* ignore */ }
+    }
+    loadAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+
     miniTitle.textContent = track.title;
     miniArtist.textContent = track.artist || "";
     npTitle.textContent = track.title;
@@ -454,16 +470,59 @@
     seek.value = 0;
     updateSeekFill();
     currentTimeEl.textContent = "0:00";
-    const cached = durationCache.get(track.file);
+    const cached = durationCache.get(durationKey(track)) ?? durationCache.get(track.file);
     durationEl.textContent = cached != null ? formatTime(cached) : "0:00";
     highlight();
     document.title = `${track.title} · My Music`;
     updateMediaSession();
     showMiniBar();
     saveState();
-    if (autoplay) {
-      audio.play().catch(() => setPlayingUI(false));
+
+    const startPlayback = (src) => {
+      if (token !== loadToken) return;
+      audio.removeAttribute("crossorigin");
+      audio.src = src;
+      if (autoplay) {
+        audio.play().catch(() => setPlayingUI(false));
+      }
+    };
+
+    // Drive: never set audio.src to the raw usercontent URL.
+    // Those responses send CORP:same-site (blocks no-cors media) and
+    // Content-Disposition:attachment. CORS fetch → blob: works (ACAO:*).
+    if (isDriveTrack(track) && window.DriveMusic && track.driveFileId) {
+      const fileId = track.driveFileId;
+      const cachedBlob = DriveMusic.getCachedBlobUrl(fileId);
+      if (cachedBlob) {
+        startPlayback(cachedBlob);
+        return;
+      }
+      miniArtist.textContent = "Loading from Drive…";
+      setPlayingUI(false);
+      DriveMusic.fetchPlayableUrl(fileId, {
+        signal: loadAbort ? loadAbort.signal : undefined,
+      })
+        .then((blobUrl) => {
+          if (token !== loadToken) return;
+          miniArtist.textContent = track.artist || "";
+          startPlayback(blobUrl);
+        })
+        .catch((err) => {
+          if (token !== loadToken) return;
+          if (err && err.name === "AbortError") return;
+          console.warn("Drive playback failed", err);
+          miniArtist.textContent = "Could not play (Drive)";
+          setPlayingUI(false);
+          audio.removeAttribute("src");
+          try {
+            audio.load();
+          } catch (_) { /* ignore */ }
+        });
+      return;
     }
+
+    // Local / same-origin paths only
+    startPlayback(track.file);
   };
 
   const playTrackFromList = (track, sourceList) => {
@@ -496,10 +555,14 @@
 
   const prefetchDurations = () => {
     library.forEach((track) => {
-      if (durationCache.has(track.file)) {
-        writeRowDuration(track.file, durationCache.get(track.file));
+      const key = durationKey(track);
+      if (durationCache.has(key) || durationCache.has(track.file)) {
+        const sec = durationCache.get(key) ?? durationCache.get(track.file);
+        writeRowDuration(track.file, sec);
         return;
       }
+      // Drive usercontent blocks no-cors media probes (CORP:same-site)
+      if (isDriveTrack(track)) return;
       const probe = new Audio();
       probe.preload = "metadata";
       probe.src = track.file;
@@ -1096,12 +1159,18 @@
   });
   audio.addEventListener("loadedmetadata", () => {
     durationEl.textContent = formatTime(audio.duration);
-    if (queue[index]) writeRowDuration(queue[index].file, audio.duration);
+    if (queue[index] && Number.isFinite(audio.duration)) {
+      const t = queue[index];
+      durationCache.set(durationKey(t), audio.duration);
+      writeRowDuration(t.file, audio.duration);
+    }
   });
   audio.addEventListener("durationchange", () => {
     durationEl.textContent = formatTime(audio.duration);
     if (queue[index] && Number.isFinite(audio.duration)) {
-      writeRowDuration(queue[index].file, audio.duration);
+      const t = queue[index];
+      durationCache.set(durationKey(t), audio.duration);
+      writeRowDuration(t.file, audio.duration);
     }
   });
 
@@ -1397,7 +1466,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=9").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=10").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
@@ -1462,34 +1531,13 @@
       })
       .then((data) => {
         const tracks = Array.isArray(data) ? data : data.tracks || [];
-        if (tracks.length) {
-          boot(tracks);
-          return;
-        }
-        return fetch("playlist.json")
-          .then((r) => (r.ok ? r.json() : []))
-          .then((fallback) => {
-            const list = Array.isArray(fallback) ? fallback : fallback.tracks || [];
-            boot(list);
-          });
+        // Empty seed is fine — library is Drive-only (+ empty state)
+        boot(tracks);
       })
       .catch((err) => {
         console.error(err);
-        fetch("playlist.json")
-          .then((r) => (r.ok ? r.json() : []))
-          .then((fallback) => {
-            const list = Array.isArray(fallback) ? fallback : fallback.tracks || [];
-            if (list.length) boot(list);
-            else {
-              miniTitle.textContent = "Could not load library";
-              miniArtist.textContent = "Check library.json";
-              showMiniBar();
-            }
-          })
-          .catch(() => {
-            miniTitle.textContent = "Could not load library";
-            showMiniBar();
-          });
+        // Still boot so Drive cache / example folder can populate
+        boot([]);
       });
   };
 
