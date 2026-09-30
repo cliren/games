@@ -94,6 +94,12 @@
   let userPause = false;
   /** System paused us (call, other audio, OS) while we still wanted to play */
   let interruptedBySystem = false;
+  /** Per-track loudness multiplier (from Drive blob decode); UI volume stays separate */
+  let trackGain = 1;
+  /** Autoplay requested but play() failed (common when locked) — retry on focus/MS play */
+  let pendingAutoplay = false;
+  /** Absolute URL currently assigned to <audio> (detect revoked blob / src loss) */
+  let activeObjectUrl = "";
 
   /** iOS Safari / iPadOS (incl. iPad desktop UA) — Media Session quirks */
   const isIOS = () =>
@@ -108,6 +114,67 @@
     // auto: warmer buffer; metadata alone is fine for list probes
     audio.preload = "auto";
   } catch (_) { /* ignore */ }
+
+  const applyVolume = () => {
+    const ui = Number(volume && volume.value != null ? volume.value : 0.9);
+    const v = ui * (Number.isFinite(trackGain) && trackGain > 0 ? trackGain : 1);
+    // HTMLMediaElement.volume is capped at 1 — quiet tracks can only boost up to unity
+    audio.volume = Math.min(1, Math.max(0, v));
+  };
+
+  const setTrackGainForFileId = (fileId) => {
+    let g = 1;
+    try {
+      if (fileId && window.DriveMusic && DriveMusic.getCachedGain) {
+        g = Number(DriveMusic.getCachedGain(fileId)) || 1;
+      }
+    } catch (_) {
+      g = 1;
+    }
+    trackGain = g;
+    applyVolume();
+  };
+
+  const pinPlaybackBlobs = () => {
+    if (!window.DriveMusic || !DriveMusic.setPinnedFileIds || !queue.length) return;
+    const ids = [];
+    const pushId = (t) => {
+      if (t && isDriveTrack(t) && t.driveFileId) ids.push(t.driveFileId);
+    };
+    pushId(queue[index]);
+    if (queue.length > 1) {
+      pushId(queue[(index + 1) % queue.length]);
+      pushId(queue[(index - 1 + queue.length) % queue.length]);
+    }
+    try {
+      DriveMusic.setPinnedFileIds(ids);
+    } catch (_) { /* ignore */ }
+  };
+
+  /** Warm next (and prev) Drive blobs while current track plays — critical for lock-screen advance */
+  let prefetchToken = 0;
+  const prefetchNeighbors = () => {
+    if (!window.DriveMusic || !DriveMusic.fetchPlayableUrl || !queue.length) return;
+    pinPlaybackBlobs();
+    const token = ++prefetchToken;
+    const targets = [];
+    if (queue.length > 1) {
+      targets.push(queue[(index + 1) % queue.length]);
+      targets.push(queue[(index - 1 + queue.length) % queue.length]);
+    }
+    targets.forEach((t) => {
+      if (!t || !isDriveTrack(t) || !t.driveFileId) return;
+      if (DriveMusic.getCachedBlobUrl && DriveMusic.getCachedBlobUrl(t.driveFileId)) return;
+      DriveMusic.fetchPlayableUrl(t.driveFileId, {
+        resourceKey: t.driveResourceKey || "",
+      })
+        .then(() => {
+          if (token !== prefetchToken) return;
+          pinPlaybackBlobs();
+        })
+        .catch(() => { /* best-effort warm cache */ });
+    });
+  };
 
   const uid = () =>
     "pl_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -183,6 +250,7 @@
     } catch (_) { /* ignore */ }
     userPause = true;
     interruptedBySystem = false;
+    pendingAutoplay = false;
     audio.pause();
     showGate();
   };
@@ -452,33 +520,98 @@
     updatePositionState(true);
   };
 
+  const srcLooksDead = () => {
+    if (!hasTrack) return true;
+    if (!audio.src && !activeObjectUrl) return true;
+    if (audio.error) return true;
+    // Blob revoked while paused/backgrounded → NETWORK_EMPTY / decode errors
+    try {
+      if (activeObjectUrl && activeObjectUrl.startsWith("blob:") && audio.src) {
+        // If we lost the assignment somehow
+        if (!audio.src.includes("blob:") && activeObjectUrl.startsWith("blob:")) return true;
+      }
+    } catch (_) { /* ignore */ }
+    return false;
+  };
+
+  const playAudioElement = () => {
+    applyVolume();
+    return audio.play().then(() => {
+      pendingAutoplay = false;
+      interruptedBySystem = false;
+      setPlayingUI(true);
+      setupMediaSessionHandlers();
+      updateMediaSession();
+    });
+  };
+
+  /** play() when ready; retries once via canplay — lock-screen advances need this */
+  const playWhenReady = () => {
+    pendingAutoplay = true;
+    userPause = false;
+    const attempt = () =>
+      playAudioElement().catch(() => {
+        pendingAutoplay = true;
+        setPlayingUI(false);
+      });
+    if (audio.readyState >= 2 /* HAVE_CURRENT_DATA */) {
+      return attempt();
+    }
+    const onReady = () => {
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("loadeddata", onReady);
+      if (userPause) return;
+      attempt();
+    };
+    audio.addEventListener("canplay", onReady, { once: true });
+    audio.addEventListener("loadeddata", onReady, { once: true });
+    // Also poke play immediately — some WebKits fire neither while locked
+    return attempt();
+  };
+
+  const reloadCurrentAndPlay = (wantPlay) => {
+    if (!queue.length || !hasTrack) return Promise.resolve();
+    const i = index;
+    return new Promise((resolve) => {
+      loadTrack(i, !!wantPlay);
+      resolve();
+    });
+  };
+
   const mediaPlay = () => {
     userPause = false;
     interruptedBySystem = false;
-    return audio.play().catch(() => setPlayingUI(false));
+    pendingAutoplay = true;
+    applyVolume();
+    if (srcLooksDead() || !audio.src) {
+      return reloadCurrentAndPlay(true);
+    }
+    return playAudioElement().catch(() => reloadCurrentAndPlay(true));
   };
 
   const mediaPause = () => {
     userPause = true;
     interruptedBySystem = false;
+    pendingAutoplay = false;
     audio.pause();
   };
 
   const tryResumeAfterInterruption = () => {
-    if (!interruptedBySystem || userPause || !hasTrack) return;
-    if (!audio.paused) {
+    if (userPause || !hasTrack) return;
+    // Retry pending autoplay (next-track while locked) as well as system interrupts
+    if (!interruptedBySystem && !pendingAutoplay) return;
+    if (!audio.paused && !audio.error) {
       interruptedBySystem = false;
+      pendingAutoplay = false;
       return;
     }
-    if (!audio.src) return;
-    audio
-      .play()
-      .then(() => {
-        interruptedBySystem = false;
-      })
-      .catch(() => {
-        /* keep flag — next visibility/focus may retry */
-      });
+    if (srcLooksDead() || !audio.src) {
+      reloadCurrentAndPlay(true);
+      return;
+    }
+    playAudioElement().catch(() => {
+      reloadCurrentAndPlay(true);
+    });
   };
 
   const setupMediaSessionHandlers = () => {
@@ -491,6 +624,7 @@
       }
     };
     bind("play", () => {
+      // Lock-screen Play must re-call play() and rehydrate blob if silent/dead
       mediaPlay();
     });
     bind("pause", () => {
@@ -499,11 +633,13 @@
     bind("previoustrack", () => {
       userPause = false;
       interruptedBySystem = false;
+      pendingAutoplay = true;
       loadTrack(index - 1, true);
     });
     bind("nexttrack", () => {
       userPause = false;
       interruptedBySystem = false;
+      pendingAutoplay = true;
       loadTrack(index + 1, true);
     });
     bind("seekto", (details) => {
@@ -620,13 +756,25 @@
       audio.removeAttribute("crossorigin");
       setupMediaSessionHandlers();
       updateMediaSession();
+      if (isDriveTrack(track) && track.driveFileId) {
+        setTrackGainForFileId(track.driveFileId);
+      } else {
+        trackGain = 1;
+        applyVolume();
+      }
       // Always assign (never removeAttribute/empty first) so MediaSession stays continuous.
       audio.src = src;
+      activeObjectUrl = src || "";
+      pinPlaybackBlobs();
       if (autoplay) {
         userPause = false;
         interruptedBySystem = false;
-        audio.play().catch(() => setPlayingUI(false));
+        playWhenReady();
       }
+      // Warm neighbors after current src is set (sync path for lock-screen next)
+      try {
+        prefetchNeighbors();
+      } catch (_) { /* ignore */ }
     };
 
     // Drive: never set audio.src to the raw usercontent URL.
@@ -634,6 +782,7 @@
     // Content-Disposition:attachment. CORS fetch → blob: works (ACAO:*).
     if (isDriveTrack(track) && window.DriveMusic && track.driveFileId) {
       const fileId = track.driveFileId;
+      pinPlaybackBlobs();
       const cachedBlob = DriveMusic.getCachedBlobUrl(fileId);
       if (cachedBlob) {
         startPlayback(cachedBlob);
@@ -641,6 +790,8 @@
       }
       miniArtist.textContent = "Loading from Drive…";
       setPlayingUI(false);
+      // Keep pendingAutoplay so visibility/MS play can retry if fetch finishes late
+      if (autoplay) pendingAutoplay = true;
       DriveMusic.fetchPlayableUrl(fileId, {
         signal: loadAbort ? loadAbort.signal : undefined,
         resourceKey: track.driveResourceKey || "",
@@ -1304,13 +1455,15 @@
   });
 
   volume.addEventListener("input", () => {
-    audio.volume = Number(volume.value);
+    applyVolume();
     saveState();
   });
 
   audio.addEventListener("play", () => {
     userPause = false;
     interruptedBySystem = false;
+    pendingAutoplay = false;
+    applyVolume();
     setPlayingUI(true);
     setupMediaSessionHandlers();
     updateMediaSession();
@@ -1319,12 +1472,17 @@
       pushRecent(queue[index]);
       cacheAudio(queue[index].file);
     }
+    prefetchNeighbors();
   });
   // iOS often needs handlers re-bound once media is actually producing audio
   audio.addEventListener("playing", () => {
+    pendingAutoplay = false;
+    interruptedBySystem = false;
+    applyVolume();
     setupMediaSessionHandlers();
     updateMediaSession();
     updatePositionState(true);
+    prefetchNeighbors();
   });
   audio.addEventListener("pause", () => {
     setPlayingUI(false);
@@ -1342,16 +1500,21 @@
     if (repeatMode === "one") {
       audio.currentTime = 0;
       userPause = false;
-      audio.play().catch(() => setPlayingUI(false));
+      pendingAutoplay = true;
+      playWhenReady();
       return;
     }
     if (repeatMode === "off" && index >= queue.length - 1) {
+      pendingAutoplay = false;
       setPlayingUI(false);
       seek.value = 0;
       updateSeekFill();
       currentTimeEl.textContent = "0:00";
       return;
     }
+    // Advance via ended (works while locked if next blob is prefetched)
+    pendingAutoplay = true;
+    userPause = false;
     loadTrack(index + 1, true);
   });
   audio.addEventListener("timeupdate", () => {
@@ -1380,6 +1543,20 @@
     }
   });
 
+  audio.addEventListener("error", () => {
+    // Revoked blob / decode failure while locked often surfaces here
+    const cur = queue[index];
+    if (cur && isDriveTrack(cur) && cur.driveFileId && window.DriveMusic && DriveMusic.clearBlobForFile) {
+      try {
+        DriveMusic.clearBlobForFile(cur.driveFileId);
+      } catch (_) { /* ignore */ }
+    }
+    activeObjectUrl = "";
+    if (userPause || !hasTrack) return;
+    pendingAutoplay = true;
+    interruptedBySystem = true;
+  });
+
   document.addEventListener("visibilitychange", () => {
     // Do NOT pause on hidden — keep background / lock-screen playback going.
     if (document.visibilityState === "visible") {
@@ -1387,11 +1564,26 @@
       if (!audio.paused && hasTrack) {
         setupMediaSessionHandlers();
         updateMediaSession();
+        applyVolume();
       }
+    } else if (hasTrack && !userPause) {
+      // Page hiding: ensure next blob is warm before iOS freezes network
+      prefetchNeighbors();
+      setupMediaSessionHandlers();
     }
   });
   window.addEventListener("focus", () => tryResumeAfterInterruption());
   window.addEventListener("pageshow", () => tryResumeAfterInterruption());
+
+  // Loudness estimate finished for a Drive file — apply if it's the current track
+  window.addEventListener("mymusic-loudness", (ev) => {
+    const detail = ev && ev.detail;
+    if (!detail || !detail.fileId) return;
+    const cur = queue[index];
+    if (!cur || !isDriveTrack(cur) || cur.driveFileId !== detail.fileId) return;
+    trackGain = Number(detail.gain) || 1;
+    applyVolume();
+  });
 
   document.addEventListener("keydown", (e) => {
     if (document.body.classList.contains("gated")) return;
@@ -1432,6 +1624,7 @@
     try {
       userPause = true;
       interruptedBySystem = false;
+      pendingAutoplay = false;
       audio.pause();
     } catch (_) { /* ignore */ }
     try {
@@ -1850,7 +2043,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=21").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=22").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
@@ -1931,7 +2124,8 @@
     appStarted = true;
     hideGate();
     loadState();
-    audio.volume = Number(volume.value);
+    trackGain = 1;
+    applyVolume();
     updateSeekFill();
     setRepeatUI();
     setShuffleUI();

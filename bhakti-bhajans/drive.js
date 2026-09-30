@@ -362,9 +362,18 @@
     return usercontentUrl(fileId, "t");
   };
 
-  /** In-memory blob: URL cache keyed by Drive file id (LRU-ish, max 4). */
-  const blobUrlCache = new Map(); // fileId -> { url, ts }
-  const BLOB_CACHE_MAX = 4;
+  /**
+   * In-memory blob: URL cache keyed by Drive file id (LRU-ish).
+   * Pin current/next/prev so lock-screen / background advances never
+   * revokeObjectURL the src still assigned to <audio> (silent next song).
+   * entry: { url, ts, gain? }
+   */
+  const blobUrlCache = new Map();
+  const BLOB_CACHE_MAX = 8;
+  /** @type {Set<string>} */
+  const pinnedFileIds = new Set();
+  /** fileId -> loudness gain (1 = unity); filled async after decode */
+  const loudnessGainCache = new Map();
 
   const revokeBlobUrl = (url) => {
     if (!url || !String(url).startsWith("blob:")) return;
@@ -373,11 +382,26 @@
     } catch (_) { /* ignore */ }
   };
 
+  const setPinnedFileIds = (ids) => {
+    pinnedFileIds.clear();
+    (ids || []).forEach((id) => {
+      if (id) pinnedFileIds.add(String(id));
+    });
+    // Touch pinned entries so they win LRU
+    const now = Date.now();
+    for (const id of pinnedFileIds) {
+      const entry = blobUrlCache.get(id);
+      if (entry) entry.ts = now;
+    }
+    trimBlobCache();
+  };
+
   const trimBlobCache = () => {
     while (blobUrlCache.size > BLOB_CACHE_MAX) {
       let oldestKey = null;
       let oldestTs = Infinity;
       for (const [k, v] of blobUrlCache) {
+        if (pinnedFileIds.has(k)) continue;
         if (v.ts < oldestTs) {
           oldestTs = v.ts;
           oldestKey = k;
@@ -397,16 +421,96 @@
     return entry.url;
   };
 
+  const getCachedGain = (fileId) => {
+    if (!fileId) return 1;
+    if (loudnessGainCache.has(fileId)) return loudnessGainCache.get(fileId);
+    const entry = blobUrlCache.get(fileId);
+    if (entry && typeof entry.gain === "number") return entry.gain;
+    return 1;
+  };
+
   const clearBlobCache = () => {
     for (const entry of blobUrlCache.values()) revokeBlobUrl(entry.url);
     blobUrlCache.clear();
+    loudnessGainCache.clear();
+    pinnedFileIds.clear();
   };
 
   const clearBlobForFile = (fileId) => {
     if (!fileId || !blobUrlCache.has(fileId)) return;
     const entry = blobUrlCache.get(fileId);
     blobUrlCache.delete(fileId);
+    loudnessGainCache.delete(fileId);
     if (entry) revokeBlobUrl(entry.url);
+  };
+
+  /**
+   * Rough RMS-based gain so quieter / louder recordings sit nearer each other.
+   * Caps boost (HTMLMediaElement.volume max is 1). Never routes through Web Audio —
+   * AudioContext suspends on iOS lock/background and would silence lock-screen audio.
+   */
+  const estimateLoudnessGain = async (arrayBuffer) => {
+    const AC = global.AudioContext || global.webkitAudioContext;
+    if (!AC || !arrayBuffer || arrayBuffer.byteLength < 64) return 1;
+    let ctx = null;
+    try {
+      ctx = new AC();
+      const copy = arrayBuffer.slice(0);
+      const decoded = await ctx.decodeAudioData(copy);
+      let sum = 0;
+      let n = 0;
+      const channels = decoded.numberOfChannels || 1;
+      for (let c = 0; c < channels; c++) {
+        const data = decoded.getChannelData(c);
+        const step = Math.max(1, Math.floor(data.length / 250000));
+        for (let i = 0; i < data.length; i += step) {
+          const s = data[i];
+          sum += s * s;
+          n++;
+        }
+      }
+      if (!n) return 1;
+      const rms = Math.sqrt(sum / n);
+      // Target ~0.12 RMS (~comfortable speech/music); clamp so we don't clip badly.
+      const target = 0.12;
+      if (rms < 0.0008) return 1;
+      const raw = target / rms;
+      return Math.min(3.2, Math.max(0.35, raw));
+    } catch (_) {
+      return 1;
+    } finally {
+      if (ctx) {
+        try {
+          ctx.close();
+        } catch (_) { /* ignore */ }
+      }
+    }
+  };
+
+  const scheduleLoudnessEstimate = (fileId, arrayBuffer) => {
+    if (!fileId || !arrayBuffer) return;
+    // Defer so startPlayback isn't blocked on decode
+    const run = () => {
+      estimateLoudnessGain(arrayBuffer)
+        .then((gain) => {
+          loudnessGainCache.set(fileId, gain);
+          const entry = blobUrlCache.get(fileId);
+          if (entry) entry.gain = gain;
+          try {
+            if (typeof global.dispatchEvent === "function") {
+              global.dispatchEvent(
+                new CustomEvent("mymusic-loudness", { detail: { fileId, gain } })
+              );
+            }
+          } catch (_) { /* ignore */ }
+        })
+        .catch(() => { /* ignore */ });
+    };
+    if (typeof global.requestIdleCallback === "function") {
+      global.requestIdleCallback(run, { timeout: 4000 });
+    } else {
+      setTimeout(run, 50);
+    }
   };
 
   /** Wipe cached Drive track metadata + in-memory blobs. Keeps folder URL list and unlock password. */
@@ -467,9 +571,13 @@
     return URL.createObjectURL(blob);
   };
 
-  const storeBlob = (fileId, objectUrl) => {
-    blobUrlCache.set(fileId, { url: objectUrl, ts: Date.now() });
+  const storeBlob = (fileId, objectUrl, arrayBuffer) => {
+    const prev = blobUrlCache.get(fileId);
+    if (prev && prev.url && prev.url !== objectUrl) revokeBlobUrl(prev.url);
+    const gain = loudnessGainCache.has(fileId) ? loudnessGainCache.get(fileId) : 1;
+    blobUrlCache.set(fileId, { url: objectUrl, ts: Date.now(), gain });
     trimBlobCache();
+    if (arrayBuffer) scheduleLoudnessEstimate(fileId, arrayBuffer);
     return objectUrl;
   };
 
@@ -786,7 +894,7 @@
       try {
         const { buf, type } = await fn();
         const objectUrl = bufferToObjectUrl(buf, type);
-        return storeBlob(fileId, objectUrl);
+        return storeBlob(fileId, objectUrl, buf);
       } catch (err) {
         if (err && err.name === "AbortError") throw err;
         if (!primaryErr) primaryErr = err;
@@ -1459,6 +1567,8 @@
     usercontentUrl,
     fetchPlayableUrl,
     getCachedBlobUrl,
+    getCachedGain,
+    setPinnedFileIds,
     clearBlobCache,
     clearBlobForFile,
     clearTrackCache,

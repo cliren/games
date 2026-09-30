@@ -29,7 +29,7 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 | List folder files | **Password preferred** | Drive `files.list` when unlocked (complete). Keyless: merge jina/allorigins of `embeddedfolderview` (jina alone often truncates) |
 | Play | **API key or media proxy** | Browser → blob URL. Direct `drive.usercontent` is blocked cross-site (see below). |
 
-**Why playback needs a password or proxy (v11–v21):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
+**Why playback needs a password or proxy (v11–v22):** Google applies Fetch Metadata isolation on `drive.usercontent.google.com`: any browser request with `Sec-Fetch-Site: cross-site` (always true from github.io) receives **HTTP 403** with no CORS headers. Curl/Node without that header still get `audio/mpeg` + `ACAO:*`, which is why earlier “blob fetch” fixes looked fine outside a real browser. Same-site `CORP` also blocks raw `<audio src>`.
 
 **Playback options (Sources):**
 1. **Drive API key** — `googleapis.com/drive/v3/files/ID?alt=media&key=…` (CORS works). Restrict the key’s HTTP referrer to `https://cliren.github.io/*`. Paste into **Sources** only — stored in `localStorage` `myMusic.driveApiKey`. **Never commit API keys** (no embedded default in `drive.js`).
@@ -64,9 +64,11 @@ The unlock **password** is stored in this browser (`myMusic.driveApiKey`). Unloc
 
 Media Session keeps play/pause/skip on the lock screen while the `<audio>` element is the active media source. After an incoming call, the player marks a system interruption (not a user pause) and calls `audio.play()` again when the page becomes visible/focused.
 
-**iOS Safari (v21):** Do **not** register `seekbackward` / `seekforward` — those replace next/previous in Control Center / lock screen. Handlers are re-bound on every `loadTrack` / `play` / `playing`. Artwork uses real 96×128 PNG data URLs (first). `setPositionState` is throttled on `timeupdate`. Visibility-hidden does **not** pause user-intended playback. Track switches update metadata then assign `audio.src` (no empty-src clear) so the session stays continuous. Blob:` playback from a user gesture is fine on iOS.
+**iOS Safari (v21–v22):** Do **not** register `seekbackward` / `seekforward` — those replace next/previous in Control Center / lock screen. Handlers are re-bound on every `loadTrack` / `play` / `playing`. Artwork uses real 96×128 PNG data URLs (first). `setPositionState` is throttled on `timeupdate`. Visibility-hidden does **not** pause user-intended playback. Track switches update metadata then assign `audio.src` (no empty-src clear) so the session stays continuous. Blob:` playback from a user gesture is fine on iOS.
 
-**iOS Safari limits:** Background/lock controls need a prior user-gesture start; artwork works best as PNG (SVG is often ignored). Auto-resume after a call is best-effort — iOS may still require a tap if the tab was fully suspended. Add to Home Screen (standalone) improves reliability vs a background Safari tab.
+**iOS Safari (v22):** Prefetch + pin current/next/prev Drive `blob:` URLs so lock-screen / background track advance does not wait on network or hit a revoked object URL (silent next song). Media Session `play` rehydrates a dead blob and retries `play()`. Loudness: per-track gain from RMS decode applied via `audio.volume` (not Web Audio — `AudioContext` suspends when locked and would mute background audio). UI volume still works; boost is capped at 1.0.
+
+**iOS Safari limits:** Background/lock controls need a prior user-gesture start; artwork works best as PNG (SVG is often ignored). Auto-resume after a call is best-effort — iOS may still require a tap if the tab was fully suspended. Add to Home Screen (standalone) improves reliability vs a background Safari tab. While fully suspended, JS/network may pause — next-track works best when the following song was prefetched before suspend. Overnight shuffle can still stall if iOS freezes the PWA entirely (platform limit).
 
 ## Develop
 
