@@ -681,6 +681,28 @@ body {
   margin-top: 0.1rem;
 }
 
+.mini-add {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--pink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.mini-add:hover {
+  background: var(--bg-fill);
+}
+
+.mini-add:active {
+  transform: scale(0.92);
+}
+
 .mini-play {
   width: 44px;
   height: 44px;
@@ -972,6 +994,101 @@ body {
 .volume {
   height: 4px;
   flex: 1;
+}
+
+.np-extra-actions {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0 0.25rem;
+}
+
+.np-add-pl {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border-radius: 980px;
+  background: rgba(252, 60, 68, 0.1);
+}
+
+.np-add-pl:hover {
+  background: rgba(252, 60, 68, 0.16);
+}
+
+.atp-dialog {
+  max-width: 360px;
+}
+
+.atp-form {
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+}
+
+.atp-status {
+  margin: -0.35rem 0 0.65rem;
+  font-size: 0.88rem;
+  color: var(--pink);
+  font-weight: 500;
+}
+
+.atp-list {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  overflow-y: auto;
+  max-height: 42vh;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  background: var(--bg-grouped);
+}
+
+.atp-empty {
+  padding: 1rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.atp-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--separator);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+}
+
+.atp-item:last-child {
+  border-bottom: none;
+}
+
+.atp-item:active {
+  background: var(--bg-fill);
+}
+
+.atp-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atp-count {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.atp-actions {
+  justify-content: space-between;
 }
 
 /* ——— Dialog ——— */

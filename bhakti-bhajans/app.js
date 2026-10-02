@@ -48,6 +48,13 @@
   const nameDialogTitle = document.getElementById("nameDialogTitle");
   const nameInput = document.getElementById("nameInput");
   const addTrackSelect = document.getElementById("addTrackSelect");
+  const btnAddToPlaylist = document.getElementById("btnAddToPlaylist");
+  const miniAddToPlaylist = document.getElementById("miniAddToPlaylist");
+  const addToPlaylistDialog = document.getElementById("addToPlaylistDialog");
+  const addToPlaylistList = document.getElementById("addToPlaylistList");
+  const addToPlaylistStatus = document.getElementById("addToPlaylistStatus");
+  const btnAddToPlaylistNew = document.getElementById("btnAddToPlaylistNew");
+  const btnAddToPlaylistCancel = document.getElementById("btnAddToPlaylistCancel");
   const countBhakti = document.getElementById("countBhakti");
   const countFolk = document.getElementById("countFolk");
   const countOther = document.getElementById("countOther");
@@ -94,6 +101,12 @@
   let userPause = false;
   /** System paused us (call, other audio, OS) while we still wanted to play */
   let interruptedBySystem = false;
+  /** Page hid while audio was still playing (outgoing call / leave-app) — order vs pause matters */
+  let leftForegroundFirst = false;
+  /** Timestamp when we hid while still playing (ms) */
+  let hiddenWhilePlayingAt = 0;
+  /** Do not auto-resume on next foreground (outgoing / user leave heuristic) */
+  let skipAutoResume = false;
   /** Per-track loudness multiplier (from Drive blob decode); UI volume stays separate */
   let trackGain = 1;
   /** Autoplay requested but play() failed (common when locked) — retry on focus/MS play */
@@ -581,6 +594,8 @@
   const mediaPlay = () => {
     userPause = false;
     interruptedBySystem = false;
+    skipAutoResume = false;
+    leftForegroundFirst = false;
     pendingAutoplay = true;
     applyVolume();
     if (srcLooksDead() || !audio.src) {
@@ -593,11 +608,51 @@
     userPause = true;
     interruptedBySystem = false;
     pendingAutoplay = false;
+    skipAutoResume = false;
+    leftForegroundFirst = false;
     audio.pause();
+  };
+
+  /** Fully kill playback + Media Session (lock-screen swipe-dismiss / unload). */
+  const hardStopPlayer = () => {
+    userPause = true;
+    interruptedBySystem = false;
+    pendingAutoplay = false;
+    skipAutoResume = true;
+    leftForegroundFirst = false;
+    hiddenWhilePlayingAt = 0;
+    try {
+      audio.pause();
+    } catch (_) { /* ignore */ }
+    try {
+      audio.removeAttribute("src");
+      audio.load();
+    } catch (_) { /* ignore */ }
+    activeObjectUrl = "";
+    setPlayingUI(false);
+    if ("mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.playbackState = "none";
+      } catch (_) { /* ignore */ }
+      try {
+        navigator.mediaSession.metadata = null;
+      } catch (_) { /* ignore */ }
+      const clear = (action) => {
+        try {
+          navigator.mediaSession.setActionHandler(action, null);
+        } catch (_) { /* ignore */ }
+      };
+      ["play", "pause", "stop", "previoustrack", "nexttrack", "seekto", "seekbackward", "seekforward"].forEach(clear);
+    }
   };
 
   const tryResumeAfterInterruption = () => {
     if (userPause || !hasTrack) return;
+    if (skipAutoResume) {
+      skipAutoResume = false;
+      interruptedBySystem = false;
+      return;
+    }
     // Retry pending autoplay (next-track while locked) as well as system interrupts
     if (!interruptedBySystem && !pendingAutoplay) return;
     if (!audio.paused && !audio.error) {
@@ -630,15 +685,21 @@
     bind("pause", () => {
       mediaPause();
     });
+    // Swipe-dismiss / Stop on lock screen (best-effort; iOS may not expose native swipe)
+    bind("stop", () => {
+      hardStopPlayer();
+    });
     bind("previoustrack", () => {
       userPause = false;
       interruptedBySystem = false;
+      skipAutoResume = false;
       pendingAutoplay = true;
       loadTrack(index - 1, true);
     });
     bind("nexttrack", () => {
       userPause = false;
       interruptedBySystem = false;
+      skipAutoResume = false;
       pendingAutoplay = true;
       loadTrack(index + 1, true);
     });
@@ -1240,6 +1301,84 @@
       }
     });
 
+  const closeAddToPlaylistDialog = () => {
+    if (!addToPlaylistDialog) return;
+    try {
+      if (addToPlaylistDialog.open) addToPlaylistDialog.close();
+    } catch (_) { /* ignore */ }
+  };
+
+  const addTrackToPlaylist = (pl, trackId) => {
+    if (!pl || !trackId) return { ok: false, reason: "missing" };
+    if (pl.trackIds.includes(trackId)) return { ok: false, reason: "exists" };
+    pl.trackIds.push(trackId);
+    saveState();
+    if (activePlaylistId === pl.id) {
+      renderPlaylistTracks(pl);
+      populateAddSelect(pl);
+    }
+    renderPlaylists();
+    return { ok: true };
+  };
+
+  const renderAddToPlaylistPicker = () => {
+    if (!addToPlaylistList) return;
+    addToPlaylistList.innerHTML = "";
+    if (addToPlaylistStatus) {
+      addToPlaylistStatus.textContent = "";
+      addToPlaylistStatus.hidden = true;
+    }
+    if (!playlists.length) {
+      const li = document.createElement("li");
+      li.className = "atp-empty";
+      li.textContent = "No playlists yet. Create one below.";
+      addToPlaylistList.appendChild(li);
+      return;
+    }
+    playlists.forEach((pl) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "atp-item";
+      const n = pl.trackIds.length;
+      btn.innerHTML =
+        '<span class="atp-name"></span><span class="atp-count"></span>';
+      btn.querySelector(".atp-name").textContent = pl.name;
+      btn.querySelector(".atp-count").textContent = `${n} song${n === 1 ? "" : "s"}`;
+      btn.addEventListener("click", () => {
+        const track = queue[index];
+        if (!track) return;
+        const res = addTrackToPlaylist(pl, track.id);
+        if (addToPlaylistStatus) {
+          addToPlaylistStatus.hidden = false;
+          if (res.ok) {
+            addToPlaylistStatus.textContent = `Added to “${pl.name}”`;
+            setTimeout(() => closeAddToPlaylistDialog(), 450);
+          } else if (res.reason === "exists") {
+            addToPlaylistStatus.textContent = `Already in “${pl.name}”`;
+          } else {
+            addToPlaylistStatus.textContent = "Couldn’t add song.";
+          }
+        } else if (res.ok) {
+          closeAddToPlaylistDialog();
+        }
+      });
+      li.appendChild(btn);
+      addToPlaylistList.appendChild(li);
+    });
+  };
+
+  const openAddToPlaylist = () => {
+    if (!hasTrack || !queue[index]) return;
+    renderAddToPlaylistPicker();
+    if (!addToPlaylistDialog) return;
+    if (typeof addToPlaylistDialog.showModal === "function") {
+      addToPlaylistDialog.showModal();
+    } else {
+      addToPlaylistDialog.setAttribute("open", "");
+    }
+  };
+
   const shufflePlayCurrentList = () => {
     const list = currentListTracks.slice();
     if (list.length < 2) return;
@@ -1404,9 +1543,38 @@
     addTrackSelect.value = "";
   });
 
+  if (btnAddToPlaylist) {
+    btnAddToPlaylist.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openAddToPlaylist();
+    });
+  }
+  if (miniAddToPlaylist) {
+    miniAddToPlaylist.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openAddToPlaylist();
+    });
+  }
+  if (btnAddToPlaylistNew) {
+    btnAddToPlaylistNew.addEventListener("click", async () => {
+      closeAddToPlaylistDialog();
+      const name = await askName("New playlist", "");
+      if (!name) return;
+      const pl = { id: uid(), name, trackIds: [] };
+      playlists.push(pl);
+      const track = queue[index];
+      if (track) addTrackToPlaylist(pl, track.id);
+      else saveState();
+      renderPlaylists();
+    });
+  }
+  if (btnAddToPlaylistCancel) {
+    btnAddToPlaylistCancel.addEventListener("click", () => closeAddToPlaylistDialog());
+  }
+
   // ——— Mini-bar / sheet ———
   const onMiniActivate = (e) => {
-    if (e.target.closest("#miniPlay")) return;
+    if (e.target.closest("#miniPlay") || e.target.closest("#miniAddToPlaylist")) return;
     if (!hasTrack) return;
     openSheet();
   };
@@ -1462,6 +1630,8 @@
   audio.addEventListener("play", () => {
     userPause = false;
     interruptedBySystem = false;
+    skipAutoResume = false;
+    leftForegroundFirst = false;
     pendingAutoplay = false;
     applyVolume();
     setPlayingUI(true);
@@ -1490,10 +1660,24 @@
     // Distinguish user pause from system interruption (incoming call, other audio, OS).
     if (userPause) {
       interruptedBySystem = false;
+      leftForegroundFirst = false;
       return;
     }
     if (!hasTrack || !audio.src || audio.ended) return;
+    // Outgoing / leave: page hid while still playing, then pause arrived later.
+    // Incoming / audio steal: pause while visible, or hide+pause nearly together.
+    // Hard limit: iOS often hides on incoming too — short hide window still resumes.
+    if (document.visibilityState === "hidden" && leftForegroundFirst) {
+      const hidFor = hiddenWhilePlayingAt ? Date.now() - hiddenWhilePlayingAt : 0;
+      if (hidFor > 700) {
+        interruptedBySystem = false;
+        skipAutoResume = true;
+        pendingAutoplay = false;
+        return;
+      }
+    }
     interruptedBySystem = true;
+    skipAutoResume = false;
   });
   audio.addEventListener("ended", () => {
     interruptedBySystem = false;
@@ -1560,6 +1744,8 @@
   document.addEventListener("visibilitychange", () => {
     // Do NOT pause on hidden — keep background / lock-screen playback going.
     if (document.visibilityState === "visible") {
+      leftForegroundFirst = false;
+      hiddenWhilePlayingAt = 0;
       tryResumeAfterInterruption();
       if (!audio.paused && hasTrack) {
         setupMediaSessionHandlers();
@@ -1567,6 +1753,11 @@
         applyVolume();
       }
     } else if (hasTrack && !userPause) {
+      // Mark leave-first if we hid while audio was still playing (outgoing heuristic)
+      if (!audio.paused) {
+        leftForegroundFirst = true;
+        hiddenWhilePlayingAt = Date.now();
+      }
       // Page hiding: ensure next blob is warm before iOS freezes network
       prefetchNeighbors();
       setupMediaSessionHandlers();
@@ -1574,6 +1765,12 @@
   });
   window.addEventListener("focus", () => tryResumeAfterInterruption());
   window.addEventListener("pageshow", () => tryResumeAfterInterruption());
+  // Unload / tab kill: stop audio + drop Media Session. Do NOT stop on freeze/lock
+  // (intentional background play while screen locked must continue).
+  window.addEventListener("pagehide", (e) => {
+    if (e && e.persisted) return; // bfcache — keep session
+    hardStopPlayer();
+  });
 
   // Loudness estimate finished for a Drive file — apply if it's the current track
   window.addEventListener("mymusic-loudness", (ev) => {
@@ -1589,6 +1786,13 @@
     if (document.body.classList.contains("gated")) return;
     if (e.target.matches("input, textarea, select")) return;
     if (nameDialog.open) return;
+    if (addToPlaylistDialog && addToPlaylistDialog.open) {
+      if (e.code === "Escape") {
+        e.preventDefault();
+        closeAddToPlaylistDialog();
+      }
+      return;
+    }
     const driveDlg = document.getElementById("driveFolderDialog");
     if (driveDlg && driveDlg.open) return;
     const driveFilesDlg = document.getElementById("driveFilesDialog");
@@ -2043,7 +2247,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=22").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=23").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };
