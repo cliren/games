@@ -107,6 +107,16 @@
   let hiddenWhilePlayingAt = 0;
   /** Do not auto-resume on next foreground (outgoing / user leave heuristic) */
   let skipAutoResume = false;
+  /** True while an explicit Play forces pause→play (that pause is not a user pause) */
+  let resumeKick = false;
+  /** Ignore a stale system pause action in the same beat as explicit Play */
+  let suppressSystemPause = false;
+  /** ms timestamp of the last explicit Play (lock screen / in-app) */
+  let explicitPlayAt = 0;
+  /** Re-play attempts after a stale interruption pause following explicit Play */
+  let explicitPlayRetries = 0;
+  /** Cancels a deferred pagehide check when a newer one arrives */
+  let pagehideToken = 0;
   /** Per-track loudness multiplier (from Drive blob decode); UI volume stays separate */
   let trackGain = 1;
   /** Autoplay requested but play() failed (common when locked) — retry on focus/MS play */
@@ -533,18 +543,80 @@
     updatePositionState(true);
   };
 
-  const srcLooksDead = () => {
-    if (!hasTrack) return true;
-    if (!audio.src && !activeObjectUrl) return true;
-    if (audio.error) return true;
-    // Blob revoked while paused/backgrounded → NETWORK_EMPTY / decode errors
-    try {
-      if (activeObjectUrl && activeObjectUrl.startsWith("blob:") && audio.src) {
-        // If we lost the assignment somehow
-        if (!audio.src.includes("blob:") && activeObjectUrl.startsWith("blob:")) return true;
+  /**
+   * Put a still-cached blob (or local file) on <audio> synchronously.
+   * Lock-screen Play must not wait on a fetch — iOS drops the media-session
+   * activation, and a later audio.play() is ignored while the screen is locked.
+   * Returns true when play() can be called in this same turn.
+   */
+  const rehydrateSrcSync = () => {
+    const track = queue[index];
+    if (!track) return false;
+    const saved = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+    const assign = (src) => {
+      if (!src) return false;
+      if (audio.src === src && !audio.error) {
+        try {
+          if (audio.networkState === 3) return false;
+        } catch (_) { /* ignore */ }
+        activeObjectUrl = src;
+        return true;
       }
+      try {
+        audio.removeAttribute("crossorigin");
+      } catch (_) { /* ignore */ }
+      audio.src = src;
+      activeObjectUrl = src;
+      if (saved > 0.25) {
+        const restore = () => {
+          try {
+            if (Number.isFinite(audio.duration) && saved < audio.duration) {
+              audio.currentTime = saved;
+            }
+          } catch (_) { /* ignore */ }
+        };
+        audio.addEventListener("loadedmetadata", restore, { once: true });
+      }
+      return true;
+    };
+
+    if (isDriveTrack(track) && window.DriveMusic && track.driveFileId) {
+      let cached = null;
+      try {
+        if (DriveMusic.getCachedBlobUrl) cached = DriveMusic.getCachedBlobUrl(track.driveFileId);
+      } catch (_) { cached = null; }
+      if (cached) return assign(cached);
+      // Cache miss: still try the element src if it has not errored.
+      if (audio.src && !audio.error) {
+        try {
+          if (audio.networkState !== 3) return true;
+        } catch (_) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if (track.file) return assign(track.file);
+    return !!(audio.src && !audio.error);
+  };
+
+  /** pause-if-wedged then play(). Synthetic pause must not latch userPause / skipAutoResume. */
+  const kickPlayback = () => {
+    applyVolume();
+    resumeKick = true;
+    try {
+      // After a distraction iOS often leaves paused===false with no audio.
+      // play() is then a no-op until something pauses the element first.
+      if (!audio.paused) audio.pause();
     } catch (_) { /* ignore */ }
-    return false;
+    resumeKick = false;
+    userPause = false;
+    skipAutoResume = false;
+    pendingAutoplay = true;
+    try {
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+    } catch (_) { /* ignore */ }
+    return playAudioElement();
   };
 
   const playAudioElement = () => {
@@ -591,17 +663,55 @@
     });
   };
 
+  /**
+   * Explicit Play (lock screen, Control Center, in-app).
+   * Always clears skipAutoResume / userPause. Always calls play() in this turn
+   * when a src can be restored from the blob cache. Never a no-op.
+   */
   const mediaPlay = () => {
     userPause = false;
     interruptedBySystem = false;
     skipAutoResume = false;
     leftForegroundFirst = false;
+    hiddenWhilePlayingAt = 0;
     pendingAutoplay = true;
+    explicitPlayAt = Date.now();
+    explicitPlayRetries = 0;
+    suppressSystemPause = true;
+    setTimeout(() => {
+      suppressSystemPause = false;
+    }, 80);
+    // A previous stop/pagehide may have dropped handlers — put them back
+    // before play so the session stays controllable while locked.
+    setupMediaSessionHandlers();
+    try {
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+    } catch (_) { /* ignore */ }
     applyVolume();
-    if (srcLooksDead() || !audio.src) {
-      return reloadCurrentAndPlay(true);
+
+    if (!rehydrateSrcSync()) {
+      pendingAutoplay = true;
+      loadTrack(index, true);
+      return;
     }
-    return playAudioElement().catch(() => reloadCurrentAndPlay(true));
+    return kickPlayback().catch(() => {
+      pendingAutoplay = true;
+      setPlayingUI(false);
+      const track = queue[index];
+      if (
+        track &&
+        isDriveTrack(track) &&
+        audio.error &&
+        window.DriveMusic &&
+        DriveMusic.clearBlobForFile
+      ) {
+        try {
+          DriveMusic.clearBlobForFile(track.driveFileId);
+        } catch (_) { /* ignore */ }
+        activeObjectUrl = "";
+      }
+      reloadCurrentAndPlay(true);
+    });
   };
 
   const mediaPause = () => {
@@ -610,6 +720,9 @@
     pendingAutoplay = false;
     skipAutoResume = false;
     leftForegroundFirst = false;
+    explicitPlayAt = 0;
+    explicitPlayRetries = 0;
+    suppressSystemPause = false;
     audio.pause();
   };
 
@@ -648,23 +761,21 @@
 
   const tryResumeAfterInterruption = () => {
     if (userPause || !hasTrack) return;
+    // Outgoing / leave: do not auto-play just because the page came back.
+    // Explicit lock-screen Play does not go through here.
     if (skipAutoResume) {
       skipAutoResume = false;
       interruptedBySystem = false;
       return;
     }
-    // Retry pending autoplay (next-track while locked) as well as system interrupts
     if (!interruptedBySystem && !pendingAutoplay) return;
-    if (!audio.paused && !audio.error) {
-      interruptedBySystem = false;
-      pendingAutoplay = false;
-      return;
-    }
-    if (srcLooksDead() || !audio.src) {
+    if (!rehydrateSrcSync()) {
       reloadCurrentAndPlay(true);
       return;
     }
-    playAudioElement().catch(() => {
+    // Kick even if paused===false: a distraction can leave the element
+    // "playing" but silent, and play() alone does nothing.
+    kickPlayback().catch(() => {
       reloadCurrentAndPlay(true);
     });
   };
@@ -679,10 +790,17 @@
       }
     };
     bind("play", () => {
-      // Lock-screen Play must re-call play() and rehydrate blob if silent/dead
+      // Must run synchronously: rehydrate, then play(). Never ignore this.
       mediaPlay();
     });
     bind("pause", () => {
+      // iOS can deliver a stale interruption "pause" in the same beat as Play.
+      if (suppressSystemPause || resumeKick) {
+        userPause = false;
+        skipAutoResume = false;
+        pendingAutoplay = true;
+        return;
+      }
       mediaPause();
     });
     // Swipe-dismiss / Stop on lock screen (best-effort; iOS may not expose native swipe)
@@ -1655,6 +1773,8 @@
     prefetchNeighbors();
   });
   audio.addEventListener("pause", () => {
+    // Synthetic pause inside kickPlayback — not a user pause and not "leave".
+    if (resumeKick) return;
     setPlayingUI(false);
     updatePositionState(true);
     // Distinguish user pause from system interruption (incoming call, other audio, OS).
@@ -1664,9 +1784,22 @@
       return;
     }
     if (!hasTrack || !audio.src || audio.ended) return;
-    // Outgoing / leave: page hid while still playing, then pause arrived later.
-    // Incoming / audio steal: pause while visible, or hide+pause nearly together.
-    // Hard limit: iOS often hides on incoming too — short hide window still resumes.
+    // Distraction pause landed just after lock-screen Play — start again.
+    // Does not run for an intentional pause (userPause already returned).
+    if (explicitPlayAt && Date.now() - explicitPlayAt < 1200 && explicitPlayRetries < 2) {
+      explicitPlayRetries += 1;
+      skipAutoResume = false;
+      interruptedBySystem = true;
+      pendingAutoplay = true;
+      userPause = false;
+      playAudioElement().catch(() => {
+        pendingAutoplay = true;
+      });
+      return;
+    }
+    // Screen was already locked (hid while playing) and a later distraction
+    // paused us. That is NOT a hard stop. Skip auto-resume when they reopen
+    // the app (outgoing/leave best-effort) but explicit Play must still work.
     if (document.visibilityState === "hidden" && leftForegroundFirst) {
       const hidFor = hiddenWhilePlayingAt ? Date.now() - hiddenWhilePlayingAt : 0;
       if (hidFor > 700) {
@@ -1728,17 +1861,15 @@
   });
 
   audio.addEventListener("error", () => {
-    // Revoked blob / decode failure while locked often surfaces here
-    const cur = queue[index];
-    if (cur && isDriveTrack(cur) && cur.driveFileId && window.DriveMusic && DriveMusic.clearBlobForFile) {
-      try {
-        DriveMusic.clearBlobForFile(cur.driveFileId);
-      } catch (_) { /* ignore */ }
-    }
-    activeObjectUrl = "";
+    if (resumeKick) return;
+    // Do NOT revoke the blob here. Lock-screen Play must reassign the cached
+    // blob URL synchronously inside the action handler. Revoking forces a
+    // fetch, and the follow-up play() is no longer in the user activation,
+    // so iOS ignores it until the page is opened.
     if (userPause || !hasTrack) return;
     pendingAutoplay = true;
     interruptedBySystem = true;
+    skipAutoResume = false;
   });
 
   document.addEventListener("visibilitychange", () => {
@@ -1765,11 +1896,21 @@
   });
   window.addEventListener("focus", () => tryResumeAfterInterruption());
   window.addEventListener("pageshow", () => tryResumeAfterInterruption());
-  // Unload / tab kill: stop audio + drop Media Session. Do NOT stop on freeze/lock
-  // (intentional background play while screen locked must continue).
+  // iOS fires pagehide when the screen locks, Control Center opens, or the
+  // app is switched — the document is still alive and lock-screen Play must
+  // keep working. Do NOT hard-stop there (that cleared src + action handlers,
+  // so Play became a no-op until Safari was opened). A real navigation
+  // destroys the document before this timer runs; the OS drops the session
+  // with the <audio> element. Media Session "stop" still hard-stops.
   window.addEventListener("pagehide", (e) => {
     if (e && e.persisted) return; // bfcache — keep session
-    hardStopPlayer();
+    const token = ++pagehideToken;
+    setTimeout(() => {
+      if (token !== pagehideToken) return;
+      if (!hasTrack) return;
+      setupMediaSessionHandlers();
+      if (!audio.paused) updateMediaSession();
+    }, 0);
   });
 
   // Loudness estimate finished for a Drive file — apply if it's the current track
@@ -2247,7 +2388,7 @@
 
   const registerSW = () => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("./sw.js?v=23").catch((err) => {
+    navigator.serviceWorker.register("./sw.js?v=24").catch((err) => {
       console.warn("SW registration failed", err);
     });
   };

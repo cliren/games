@@ -13,7 +13,7 @@ Ad-free static music player for GitHub Pages. Apple Music–like **Library** hom
 - Local search, shuffle / repeat, custom playlists, recently played (`localStorage` `myMusic.v1`)
 - **Clear library** (Sources) wipes imported songs, recently played, playlist contents, and Drive track/blob cache after confirm — keeps folder URLs and unlock password; per-song **Clear** on Songs / Recently Played
 - Whole-app unlock gate; service worker caches **shell only**; Drive media is never cached
-- **Call interruption resume** — incoming / system audio interrupt auto-resumes; outgoing leave (hide-then-pause) does not (best-effort on iOS)
+- **Call interruption resume** — incoming / system audio interrupt auto-resumes when you return (best-effort on iOS). A later distraction while the screen is already locked does not auto-resume, but lock-screen **Play** always starts audio again
 - **Add to Playlist** from Now Playing / mini-bar (local `myMusic.v1` playlists)
 - **Lock-screen controls** via Media Session (play / pause / stop / previous / next / seek); position updates while playing
 - **Lock-screen Stop** — Media Session `stop` (and unload `pagehide`) fully kills audio + clears the session so controls can dismiss
@@ -64,13 +64,15 @@ The unlock **password** is stored in this browser (`myMusic.driveApiKey`). Unloc
 
 ## Background / lock screen (mobile)
 
-Media Session keeps play/pause/skip/stop on the lock screen while the `<audio>` element is the active media source. After an **incoming** call (or other system audio interrupt), the player marks a system interruption and calls `audio.play()` again when the page becomes visible/focused — unless you paused yourself. If you **left the page first** (visibility hidden while still playing) and audio paused later, that is treated as outgoing/leave and does **not** auto-resume.
+Media Session keeps play/pause/skip/stop on the lock screen while the `<audio>` element is the active media source. After an **incoming** call (or other system audio interrupt), the player marks a system interruption and calls `audio.play()` again when the page becomes visible/focused — unless you paused yourself. If the screen was already locked and a distraction pauses playback later, that does **not** auto-resume when you reopen the app, but **Play on the lock screen does**.
 
 **iOS Safari (v21–v23):** Do **not** register `seekbackward` / `seekforward` — those replace next/previous in Control Center / lock screen. Handlers are re-bound on every `loadTrack` / `play` / `playing`. Artwork uses real 96×128 PNG data URLs (first). `setPositionState` is throttled on `timeupdate`. Visibility-hidden does **not** pause user-intended playback. Track switches update metadata then assign `audio.src` (no empty-src clear) so the session stays continuous. Blob:` playback from a user gesture is fine on iOS.
 
 **iOS Safari (v22–v23):** Prefetch + pin current/next/prev Drive `blob:` URLs so lock-screen / background track advance does not wait on network or hit a revoked object URL (silent next song). Media Session `play` rehydrates a dead blob and retries `play()`. Loudness: per-track gain from RMS decode applied via `audio.volume` (not Web Audio — `AudioContext` suspends when locked and would mute background audio). UI volume still works; boost is capped at 1.0.
 
-**iOS Safari (v23):** Media Session `stop` fully pauses, clears `src`, and drops Media Session metadata/handlers so lock-screen controls can go away. `pagehide` (non-bfcache unload) also hard-stops. Lock-screen freeze / visibility-hidden alone does **not** stop — intentional background play continues. Swipe-to-dismiss is not always exposed to web apps the same as native; `stop` + unload are the reliable kill paths.
+**iOS Safari (v23):** Media Session `stop` fully pauses, clears `src`, and drops Media Session metadata/handlers so lock-screen controls can go away. Swipe-to-dismiss is not always exposed to web apps the same as native; `stop` is the reliable kill path.
+
+**iOS Safari (v24):** Lock-screen / Control Center **Play** after a distraction always resumes without opening Safari. Play clears the outgoing-call `skipAutoResume` latch, reassigns a cached `blob:` URL synchronously if the element lost its source, and calls `audio.play()` in the action handler. If the element is wedged (`paused === false` but silent), Play pauses then plays in that same turn so `play()` is not a no-op. A stale system `pause` in the same beat is ignored. `pagehide` on lock / Control Center / app switch does **not** hard-stop (that had been clearing handlers so Play did nothing). Intentional pause stays paused. Hide-then-later-pause still skips *automatic* resume when the page is opened again.
 
 **iOS Safari limits:** Background/lock controls need a prior user-gesture start; artwork works best as PNG (SVG is often ignored). Distinguishing incoming vs outgoing call is imperfect (both may hide the page). Auto-resume after a call is best-effort — iOS may still require a tap if the tab was fully suspended. Add to Home Screen (standalone) improves reliability vs a background Safari tab. While fully suspended, JS/network may pause — next-track works best when the following song was prefetched before suspend. Overnight shuffle can still stall if iOS freezes the PWA entirely (platform limit).
 
